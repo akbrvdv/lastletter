@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
-// Status tampilan saat ini
 sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
@@ -24,7 +23,6 @@ class AuthViewModel @Inject constructor(
     val authState: StateFlow<AuthState> = _authState
 
     init {
-        // Cek jika user sudah login sebelumnya, langsung sukses (bisa main offline nanti)
         if (auth.currentUser != null) {
             _authState.value = AuthState.Success
         }
@@ -38,8 +36,18 @@ class AuthViewModel @Inject constructor(
         _authState.value = AuthState.Loading
         auth.signInWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
-                if (task.isSuccessful) _authState.value = AuthState.Success
-                else _authState.value = AuthState.Error(task.exception?.message ?: "Login Gagal")
+                if (task.isSuccessful) {
+                    _authState.value = AuthState.Success
+                } else {
+                    // Menerjemahkan pesan error bawaan Firebase
+                    val errorMsg = task.exception?.message?.lowercase() ?: ""
+                    val customMsg = when {
+                        errorMsg.contains("password") || errorMsg.contains("credential") -> "Password anda salah"
+                        errorMsg.contains("user not found") || errorMsg.contains("email") || errorMsg.contains("record") -> "Email anda salah atau belum terdaftar"
+                        else -> "Gagal: ${task.exception?.localizedMessage}"
+                    }
+                    _authState.value = AuthState.Error(customMsg)
+                }
             }
     }
 
@@ -51,8 +59,17 @@ class AuthViewModel @Inject constructor(
         _authState.value = AuthState.Loading
         auth.createUserWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
-                if (task.isSuccessful) _authState.value = AuthState.Success
-                else _authState.value = AuthState.Error(task.exception?.message ?: "Register Gagal")
+                if (task.isSuccessful) {
+                    _authState.value = AuthState.Success
+                } else {
+                    val errorMsg = task.exception?.message?.lowercase() ?: ""
+                    val customMsg = if (errorMsg.contains("email address is already in use")) {
+                        "Email ini sudah terdaftar, silakan login"
+                    } else {
+                        "Gagal mendaftar: ${task.exception?.localizedMessage}"
+                    }
+                    _authState.value = AuthState.Error(customMsg)
+                }
             }
     }
 }
