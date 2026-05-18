@@ -1,6 +1,7 @@
 [versions]
 # ─── Build Tools ───────────────────────────────────────────────────────────────
 agp                     = "8.7.3"
+firebaseBomVersion = "32.7.0"
 kotlin                  = "2.1.0"
 ksp                     = "2.1.0-1.0.29"
 
@@ -52,6 +53,8 @@ compose-ui-tooling              = { group = "androidx.compose.ui",         name 
 compose-ui-test-manifest        = { group = "androidx.compose.ui",         name = "ui-test-manifest" }
 compose-ui-test-junit4          = { group = "androidx.compose.ui",         name = "ui-test-junit4" }
 compose-animation               = { group = "androidx.compose.animation",  name = "animation" }
+firebase-auth = { module = "com.google.firebase:firebase-auth" }
+firebase-bom-v3270 = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBomVersion" }
 navigation-compose              = { group = "androidx.navigation",         name = "navigation-compose",            version.ref = "navigationCompose" }
 
 # ─── Room (FTS5) ───────────────────────────────────────────────────────────────

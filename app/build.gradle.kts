@@ -19,11 +19,6 @@ android {
         versionName     = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Room schema export — simpan di assets untuk inspeksi & migrasi
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
     }
 
     buildTypes {
@@ -53,6 +48,11 @@ android {
     sourceSets {
         getByName("main").assets.srcDirs("src/main/assets")
     }
+}
+
+// ─── KSP Configuration diletakkan di luar block android ───
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

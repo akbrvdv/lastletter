@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "917630819988",
-    "project_id": "lastletter-b1bc8",
-    "storage_bucket": "lastletter-b1bc8.firebasestorage.app"
+    "project_number": "891489327552",
+    "project_id": "last-letter-40a90",
+    "storage_bucket": "last-letter-40a90.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:917630819988:android:68cf00b19b62f8bf5e1e81",
+        "mobilesdk_app_id": "1:891489327552:android:ddf5d18d791cf754dcd025",
         "android_client_info": {
-          "package_name": "com.kelompok6.lastletter"
+          "package_name": "com.akbrvdv.lastletter"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB3Dv2LBS6J8zEqZmT70TT3pM6kuGUVfmY"
+          "current_key": "AIzaSyDZQC8aAEX5zlmUnyw1vX5M3m_xWou8Yyw"
         }
       ],
       "services": {
