@@ -23,9 +23,11 @@ class AuthViewModel @Inject constructor(
     val authState: StateFlow<AuthState> = _authState
 
     init {
-        if (auth.currentUser != null) {
+        // MATIKAN KODE INI: Agar saat buka aplikasi tidak langsung auto-login ke homepage
+        /* if (auth.currentUser != null) {
             _authState.value = AuthState.Success
         }
+        */
     }
 
     fun login(email: String, pass: String) {
