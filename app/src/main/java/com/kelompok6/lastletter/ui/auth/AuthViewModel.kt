@@ -11,6 +11,7 @@ sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
     object Success : AuthState()
+    object RegisterSuccess : AuthState() // 1. TAMBAHKAN STATE BARU INI
     data class Error(val message: String) : AuthState()
 }
 
@@ -23,11 +24,15 @@ class AuthViewModel @Inject constructor(
     val authState: StateFlow<AuthState> = _authState
 
     init {
-        // MATIKAN KODE INI: Agar saat buka aplikasi tidak langsung auto-login ke homepage
+        // Tetap mati sesuai algoritma awal kita kemarin
         /* if (auth.currentUser != null) {
             _authState.value = AuthState.Success
-        }
-        */
+        } */
+    }
+
+    // 2. TAMBAHKAN FUNGSI BARU INI: Untuk mereset status setelah berhasil register
+    fun resetState() {
+        _authState.value = AuthState.Idle
     }
 
     fun login(email: String, pass: String) {
@@ -41,7 +46,6 @@ class AuthViewModel @Inject constructor(
                 if (task.isSuccessful) {
                     _authState.value = AuthState.Success
                 } else {
-                    // Menerjemahkan pesan error bawaan Firebase
                     val errorMsg = task.exception?.message?.lowercase() ?: ""
                     val customMsg = when {
                         errorMsg.contains("password") || errorMsg.contains("credential") -> "Password anda salah"
@@ -62,7 +66,9 @@ class AuthViewModel @Inject constructor(
         auth.createUserWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    _authState.value = AuthState.Success
+                    // 3. UBAH DI SINI: Sign out otomatis dan ubah state ke RegisterSuccess
+                    auth.signOut()
+                    _authState.value = AuthState.RegisterSuccess
                 } else {
                     val errorMsg = task.exception?.message?.lowercase() ?: ""
                     val customMsg = if (errorMsg.contains("email address is already in use")) {

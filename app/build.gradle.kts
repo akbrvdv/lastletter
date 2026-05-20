@@ -56,6 +56,7 @@ ksp {
 }
 
 dependencies {
+    implementation("androidx.compose.material:material-icons-extended")
     // ─── AndroidX Core ─────────────────────────────────────────────────────────
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
