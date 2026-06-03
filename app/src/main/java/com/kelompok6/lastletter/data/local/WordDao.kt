@@ -5,6 +5,6 @@ import androidx.room.Query
 
 @Dao
 interface WordDao {
-    @Query("SELECT * FROM words LIMIT 1")
-    suspend fun getDummyWord(): WordEntity?
+    @Query("SELECT EXISTS(SELECT 1 FROM words WHERE word = :inputWord LIMIT 1)")
+    suspend fun isValidWord(inputWord: String): Boolean
 }

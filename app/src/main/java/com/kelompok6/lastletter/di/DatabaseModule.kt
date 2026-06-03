@@ -21,8 +21,10 @@ object DatabaseModule {
         return Room.databaseBuilder(
             context,
             WordDatabase::class.java,
-            "lastletter.db"
-        ).build()
+            "kamus.db"
+        )
+        .createFromAsset("database/kamus.db")
+        .build()
     }
 
     @Provides
