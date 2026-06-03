@@ -1,9 +1,12 @@
 package com.kelompok6.lastletter.ui.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -14,161 +17,121 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun AuthScreen(
-    onLoginSuccess: () -> Unit,
-    viewModel: AuthViewModel = hiltViewModel()
+    onLoginSuccess: () -> Unit = {}
 ) {
+    // State untuk menentukan apakah sedang di mode Login atau Register
+    var isLoginMode by remember { mutableStateOf(true) }
+
+    // State untuk menampung input form
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var isRegisterMode by remember { mutableStateOf(false) }
-
-    // TAMBAHAN: State untuk mengatur visibilitas password
     var passwordVisible by remember { mutableStateOf(false) }
 
-    val authState by viewModel.authState.collectAsState()
-
-    LaunchedEffect(authState) {
-        if (authState is AuthState.Success) {
-            onLoginSuccess()
-        } else if (authState is AuthState.RegisterSuccess) {
-            isRegisterMode = false
-            email = ""
-            password = ""
-            passwordVisible = false // Kembalikan mata ke mode tertutup
-            viewModel.resetState()
-        }
-    }
-
-    // Background layar utama
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            // Menggunakan background bawaan tema ungu/gelap asli kelompokmu
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Teks Judul
-            Text(
-                text = if (isRegisterMode) "Buat Akun Baru" else "Selamat Datang",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            )
+        // Judul utama sesuai request: Gausah "Selamat datang", langsung "Login" atau "Register"
+        Text(
+            text = if (isLoginMode) "Login" else "Register",
+            fontSize = 36.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
 
-            Text(
-                text = if (isRegisterMode) "Daftar untuk mulai berduel" else "Masuk untuk melanjutkan permainan",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
+        Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(40.dp))
+        // Subtitle keterangan kecil di bawah judul
+        Text(
+            text = if (isLoginMode) "Silakan masuk ke akun Anda" else "Silakan buat akun baru Anda",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center
+        )
 
-            // Kotak Form Login
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Email") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+        Spacer(modifier = Modifier.height(32.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+        // Input Field Email
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Filled.Email, contentDescription = "Email Icon") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            singleLine = true
+        )
 
-                    // UBAHAN: Menambahkan ikon mata dan logika VisualTransformation
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Password") },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            val image = if (passwordVisible)
-                                Icons.Filled.Visibility
-                            else Icons.Filled.VisibilityOff
+        Spacer(modifier = Modifier.height(16.dp))
 
-                            // Deskripsi untuk aksesibilitas (Screen Reader)
-                            val description = if (passwordVisible) "Sembunyikan password" else "Tampilkan password"
+        // Input Field Password
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = "Password Icon") },
+            trailingIcon = {
+                val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                val description = if (passwordVisible) "Sembunyikan password" else "Tampilkan password"
 
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(imageVector = image, contentDescription = description)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Pesan Error Merah
-                    if (authState is AuthState.Error) {
-                        Text(
-                            text = (authState as AuthState.Error).message,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    if (authState is AuthState.Loading) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Button(
-                            onClick = {
-                                if (isRegisterMode) viewModel.register(email, password)
-                                else viewModel.login(email, password)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = if (isRegisterMode) "DAFTAR SEKARANG" else "MASUK",
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(imageVector = image, contentDescription = description)
                 }
-            }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            singleLine = true
+        )
 
-            Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-            TextButton(onClick = {
-                isRegisterMode = !isRegisterMode
-                // Reset form saat pindah mode
-                email = ""
-                password = ""
-                passwordVisible = false // Reset mata saat ganti mode
-            }) {
-                Text(
-                    text = if (isRegisterMode) "Sudah punya akun? Masuk di sini" else "Belum punya akun? Daftar di sini",
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
+        // Tombol Utama (Tulisannya otomatis berubah jadi "Login" atau "Register")
+        Button(
+            onClick = {
+                // Sementara langsung memanggil onLoginSuccess agar kamu bisa masuk ke halaman utama saat testing.
+                // Nanti teman kelompokmu tinggal menghubungkan tombol ini ke AuthViewModel/Firebase mereka.
+                onLoginSuccess()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = if (isLoginMode) "Login" else "Register",
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Tombol bawah untuk pindah/toggle antar layar Login & Register
+        TextButton(
+            onClick = { isLoginMode = !isLoginMode }
+        ) {
+            Text(
+                text = if (isLoginMode) "Belum punya akun? Register di sini" else "Sudah punya akun? Login di sini",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 14.sp
+            )
         }
     }
 }

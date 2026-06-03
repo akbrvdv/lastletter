@@ -4,140 +4,120 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
 
 @Composable
-fun HomeScreen(navController: NavController) {
-    // Definisi warna sesuai desain Figma kita
-    val bgColorTop = Color(0xFF3D1F85)
-    val bgColorBottom = Color(0xFF2C165F)
-    val primaryYellow = Color(0xFFFBBC05)
-    val secondaryPurple = Color(0xFF6A2FF9)
-
+fun HomeScreen(
+    onNavigateToDuel: () -> Unit = {},
+    onNavigateToBot: () -> Unit = {}
+) {
     Scaffold(
-        containerColor = bgColorBottom
+        bottomBar = {
+            BottomNavBar()
+        }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
                 .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
 
-            // 1. Header (Profil & Koin)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Placeholder Profil
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("Player123", color = Color.White, fontWeight = FontWeight.Bold)
-                        Text("Lv. 12", color = Color.LightGray, fontSize = 12.sp)
-                    }
-                }
+            Text(
+                text = "Last Letter",
+                fontSize = 42.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
 
-                // Placeholder Koin
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = secondaryPurple),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = "🪙 1.250",
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Buktikan kemampuan kosa kata kamu dan jadilah juara!",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center
+            )
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // 2. Judul Game
-            Text(
-                text = "Last\nLetter",
-                color = primaryYellow,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.ExtraBold,
-                lineHeight = 48.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            Text(
-                text = "Tebak kata terakhir, jadi awal untuk lawan!",
-                color = Color.White,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 16.dp, bottom = 48.dp)
-            )
-
-            // 3. Tombol MAIN
             Button(
-                onClick = {
-                    // Nanti navigasi ke halaman Matchmaking/Room
-                },
+                onClick = onNavigateToDuel,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = primaryYellow)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("MAIN", color = bgColorBottom, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Text("Cari lawan sekarang!", color = bgColorBottom, fontSize = 12.sp)
-                    }
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = bgColorBottom, modifier = Modifier.size(32.dp))
-                }
+                Text(
+                    text = "Duel",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 4. Tombol MAIN VS BOT
             Button(
-                onClick = {
-                    // Nanti navigasi ke halaman In-Game vs Bot
-                },
+                onClick = onNavigateToBot,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = secondaryPurple)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("MAIN VS BOT", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Latih kemampuanmu", color = Color.White, fontSize = 12.sp)
-                    }
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                }
+                Text(
+                    text = "Mode vs bot",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
+        }
+    }
+}
+
+@Composable
+fun BottomNavBar() {
+    var selectedItem by remember { mutableIntStateOf(0) }
+    val items = listOf("Home", "History", "Profile")
+    val icons = listOf(Icons.Filled.Home, Icons.Filled.History, Icons.Filled.Person)
+
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
+        items.forEachIndexed { index, item ->
+            NavigationBarItem(
+                icon = { Icon(icons[index], contentDescription = item) },
+                label = { Text(item) },
+                selected = selectedItem == index,
+                onClick = {
+                    selectedItem = index
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                )
+            )
         }
     }
 }

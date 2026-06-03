@@ -10,8 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.kelompok6.lastletter.ui.HomeScreen // Import HomeScreen buatanmu
-import com.kelompok6.lastletter.ui.auth.AuthScreen // Import AuthScreen dari temanmu
+import com.kelompok6.lastletter.ui.HomeScreen
+import com.kelompok6.lastletter.ui.auth.AuthScreen
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -43,8 +43,23 @@ class MainActivity : ComponentActivity() {
 
                         // Layar Home Utama
                         composable("home_screen") {
-                            HomeScreen(navController = navController)
+                            HomeScreen(
+                                onNavigateToDuel = {
+                                    // Todo: Arahkan ke layar Duel.
+                                    // Pastikan nanti kamu membuat composable("duel_screen") di bawah
+                                    navController.navigate("duel_screen")
+                                },
+                                onNavigateToBot = {
+                                    // Todo: Arahkan ke layar Bot.
+                                    // Pastikan nanti kamu membuat composable("bot_screen") di bawah
+                                    navController.navigate("bot_screen")
+                                }
+                            )
                         }
+
+                        // -- Nanti teman kamu bisa menambahkan layar Duel dan Bot di bawah sini --
+                        // composable("duel_screen") { ... }
+                        // composable("bot_screen") { ... }
                     }
                 }
             }
