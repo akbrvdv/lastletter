@@ -2,8 +2,11 @@ package com.kelompok6.lastletter.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.kelompok6.lastletter.data.local.WordDatabase
 import com.kelompok6.lastletter.data.local.WordDao
+import com.kelompok6.lastletter.data.local.dao.MatchHistoryDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,6 +18,24 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `match_history` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                    `date` INTEGER NOT NULL, 
+                    `mode` TEXT NOT NULL, 
+                    `opponent` TEXT NOT NULL, 
+                    `result` TEXT NOT NULL, 
+                    `score` INTEGER NOT NULL, 
+                    `correctWords` INTEGER NOT NULL, 
+                    `wrongWords` INTEGER NOT NULL, 
+                    `wordsPlayedJson` TEXT NOT NULL
+                )
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideWordDatabase(@ApplicationContext context: Context): WordDatabase {
@@ -24,6 +45,7 @@ object DatabaseModule {
             "kamus.db"
         )
         .createFromAsset("database/kamus.db")
+        .addMigrations(MIGRATION_1_2)
         .build()
     }
 
@@ -31,5 +53,11 @@ object DatabaseModule {
     @Singleton
     fun provideWordDao(database: WordDatabase): WordDao {
         return database.wordDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMatchHistoryDao(database: WordDatabase): MatchHistoryDao {
+        return database.matchHistoryDao()
     }
 }

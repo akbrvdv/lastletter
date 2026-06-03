@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.google.services)
+    kotlin("plugin.serialization") version "2.1.0"
 }
 
 android {
@@ -88,9 +89,10 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // ─── Kotlin Coroutines ──────────────────────────────────────────────────────
+    // ─── Kotlin Coroutines & Serialization ──────────────────────────────────────
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)   // await() untuk Firebase Tasks
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // ─── Testing ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)
