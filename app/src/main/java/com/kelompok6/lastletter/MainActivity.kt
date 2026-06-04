@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.kelompok6.lastletter.ui.BotScreen
+import com.kelompok6.lastletter.ui.DuelScreen
 import com.kelompok6.lastletter.ui.HomeScreen
 import com.kelompok6.lastletter.ui.auth.AuthScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -56,10 +58,14 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+                        composable("duel_screen") {
+                            DuelScreen(navController = navController)
+                        }
 
-                        // -- Nanti teman kamu bisa menambahkan layar Duel dan Bot di bawah sini --
-                        // composable("duel_screen") { ... }
-                        // composable("bot_screen") { ... }
+                        // Layar Mode vs Bot
+                        composable("bot_screen") {
+                            BotScreen(navController = navController)
+                        }
                     }
                 }
             }
