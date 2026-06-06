@@ -7,7 +7,7 @@ import com.kelompok6.lastletter.data.local.entity.MatchHistoryEntity
 
 @Database(
     entities = [WordEntity::class, MatchHistoryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class WordDatabase : RoomDatabase() {

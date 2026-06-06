@@ -7,12 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class MatchHistoryRepository @Inject constructor(
-    private val matchHistoryDao: MatchHistoryDao
-) {
-    fun getAllHistory(): Flow<List<MatchHistoryEntity>> = matchHistoryDao.getAllHistory()
-
-    suspend fun insertHistory(match: MatchHistoryEntity) {
-        matchHistoryDao.insertMatchHistory(match)
-    }
+class MatchHistoryRepository @Inject constructor(private val dao: MatchHistoryDao) {
+    fun getHistoryByUserId(userId: String) = dao.getHistoryByUserId(userId)
+    suspend fun insertHistory(history: MatchHistoryEntity) = dao.insertHistory(history)
 }

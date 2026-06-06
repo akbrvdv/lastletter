@@ -66,6 +66,23 @@ class MainActivity : ComponentActivity() {
                         composable("bot_screen") {
                             BotScreen(navController = navController)
                         }
+                        // Layar Home Utama
+                        composable("home_screen") {
+                            HomeScreen(
+                                onNavigateToDuel = {
+                                    navController.navigate("duel_screen")
+                                },
+                                onNavigateToBot = {
+                                    navController.navigate("bot_screen")
+                                },
+                                onLogout = {
+                                    // Proteksi Navigasi: Hancurkan seluruh tumpukan halaman beranda agar kembali ke segmen Login murni
+                                    navController.navigate("auth_screen") {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }

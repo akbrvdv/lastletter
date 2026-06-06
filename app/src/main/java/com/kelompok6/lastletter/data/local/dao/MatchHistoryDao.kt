@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MatchHistoryDao {
-    @Query("SELECT * FROM match_history ORDER BY date DESC")
-    fun getAllHistory(): Flow<List<MatchHistoryEntity>>
+    @Query("SELECT * FROM match_history WHERE userId = :userId ORDER BY date DESC")
+    fun getHistoryByUserId(userId: String): Flow<List<MatchHistoryEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMatchHistory(match: MatchHistoryEntity)
+    @Insert
+    suspend fun insertHistory(history: MatchHistoryEntity)
 }

@@ -14,6 +14,7 @@ data class PlayedWordItem(
 @Entity(tableName = "match_history")
 data class MatchHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val userId: String = "", // Untuk menyimpan ID user
     val date: Long,
     val mode: String, // "OFFLINE", "ONLINE"
     val opponent: String,

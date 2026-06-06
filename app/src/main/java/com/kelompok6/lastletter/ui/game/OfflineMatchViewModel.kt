@@ -2,6 +2,7 @@ package com.kelompok6.lastletter.ui.game
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.kelompok6.lastletter.data.local.entity.MatchHistoryEntity
 import com.kelompok6.lastletter.data.local.entity.PlayedWordItem
 import com.kelompok6.lastletter.data.repository.MatchHistoryRepository
@@ -185,6 +186,7 @@ class OfflineMatchViewModel @Inject constructor(
             val finalScore = if (isWin) score + 50 else score
 
             val history = MatchHistoryEntity(
+                userId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
                 date = System.currentTimeMillis(),
                 mode = "OFFLINE",
                 opponent = "Bot",

@@ -1,137 +1,122 @@
 package com.kelompok6.lastletter.ui.auth
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 @Composable
 fun AuthScreen(
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: () -> Unit,
+    viewModel: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
-    // State untuk menentukan apakah sedang di mode Login atau Register
-    var isLoginMode by remember { mutableStateOf(true) }
-
-    // State untuk menampung input form
     var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+    var passwordUiStateStr by remember { mutableStateOf("") }
+    var isRegisterMode by remember { mutableStateOf(false) }
+    var nameDisplayRegister by remember { mutableStateOf("") }
+
+    // State untuk kontrol visibilitas password (Fitur Mata Lihat Sandi)
+    var isPasswordVisible by remember { mutableStateOf(false) }
+
+    val authState by viewModel.authState.collectAsState()
+
+    LaunchedEffect(authState) {
+        if (authState is AuthState.Success) {
+            viewModel.resetState()
+            onLoginSuccess()
+        }
+    }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            // Menggunakan background bawaan tema ungu/gelap asli kelompokmu
-            .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Judul utama sesuai request: Gausah "Selamat datang", langsung "Login" atau "Register"
         Text(
-            text = if (isLoginMode) "Login" else "Register",
-            fontSize = 36.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
+            text = if (isRegisterMode) "Buat Akun Baru" else "Selamat Datang Kembali",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
         )
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
+        if (isRegisterMode) {
+            OutlinedTextField(
+                value = nameDisplayRegister,
+                onValueChange = { nameDisplayRegister = it },
+                label = { Text("Nama Tampilan") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
-        // Subtitle keterangan kecil di bawah judul
-        Text(
-            text = if (isLoginMode) "Silakan masuk ke akun Anda" else "Silakan buat akun baru Anda",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Input Field Email
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("Email") },
-            leadingIcon = { Icon(Icons.Filled.Email, contentDescription = "Email Icon") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Input Field Password
+        // Input Password dengan Fitur Show/Hide menggunakan representasi Lock/Unlock fail-safe
         OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
+            value = passwordUiStateStr,
+            onValueChange = { passwordUiStateStr = it },
             label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = "Password Icon") },
+            singleLine = true,
+            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                val description = if (passwordVisible) "Sembunyikan password" else "Tampilkan password"
-
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(imageVector = image, contentDescription = description)
+                IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                    Icon(
+                        imageVector = if (isPasswordVisible) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                        contentDescription = if (isPasswordVisible) "Sembunyikan sandi" else "Tampilkan sandi"
+                    )
                 }
             },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true
+            modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
+        if (authState is AuthState.Loading) {
+            CircularProgressIndicator()
+        } else {
+            Button(
+                onClick = {
+                    if (isRegisterMode) {
+                        viewModel.register(email, passwordUiStateStr, nameDisplayRegister)
+                    } else {
+                        viewModel.login(email, passwordUiStateStr)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            ) {
+                Text(if (isRegisterMode) "DAFTAR" else "MASUK")
+            }
+        }
 
-        // Tombol Utama (Tulisannya otomatis berubah jadi "Login" atau "Register")
-        Button(
-            onClick = {
-                // Sementara langsung memanggil onLoginSuccess agar kamu bisa masuk ke halaman utama saat testing.
-                // Nanti teman kelompokmu tinggal menghubungkan tombol ini ke AuthViewModel/Firebase mereka.
-                onLoginSuccess()
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            shape = RoundedCornerShape(12.dp)
-        ) {
+        if (authState is AuthState.Error) {
             Text(
-                text = if (isLoginMode) "Login" else "Register",
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
+                text = (authState as AuthState.Error).message,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 12.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Tombol bawah untuk pindah/toggle antar layar Login & Register
-        TextButton(
-            onClick = { isLoginMode = !isLoginMode }
-        ) {
-            Text(
-                text = if (isLoginMode) "Belum punya akun? Register di sini" else "Sudah punya akun? Login di sini",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 14.sp
-            )
+        Spacer(modifier = Modifier.height(16.dp))
+        TextButton(onClick = {
+            isRegisterMode = !isRegisterMode
+            viewModel.resetState()
+        }) {
+            Text(if (isRegisterMode) "Sudah punya akun? Login" else "Belum punya akun? Daftar sekarang")
         }
     }
 }

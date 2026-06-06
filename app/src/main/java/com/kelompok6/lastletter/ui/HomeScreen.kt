@@ -18,12 +18,12 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,19 +43,27 @@ fun HomeScreen(
     onNavigateToBot: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
-    var selectedItem by remember { mutableIntStateOf(0) }
+    var selectedItem by rememberSaveable { mutableIntStateOf(0) }
     val auth = FirebaseAuth.getInstance()
 
-    var userName by remember { mutableStateOf(auth.currentUser?.displayName ?: "Player") }
-    var userEmail by remember { mutableStateOf(auth.currentUser?.email ?: "Email tidak ditemukan") }
-    var userUid by remember { mutableStateOf(auth.currentUser?.uid ?: "0000") }
+    // MITIGASI ERROR: Menggunakan rememberSaveable agar status tidak hancur saat berpindah halaman tab
+    var userName by rememberSaveable { mutableStateOf(auth.currentUser?.displayName ?: "Player") }
+    var userEmail by rememberSaveable { mutableStateOf(auth.currentUser?.email ?: "Email tidak ditemukan") }
+    var userUid by rememberSaveable { mutableStateOf(auth.currentUser?.uid ?: "0000") }
 
+    // Proteksi pengaman data: Hanya perbarui state jika emisi data Firebase valid (Bukan null/kosong akibat transisi thread)
     DisposableEffect(Unit) {
         val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
             if (user != null) {
-                userName = user.displayName.takeIf { !it.isNullOrBlank() } ?: "Player"
-                userEmail = user.email ?: "Email tidak ditemukan"
+                val detectedName = user.displayName
+                if (!detectedName.isNullOrBlank()) {
+                    userName = detectedName
+                }
+                val detectedEmail = user.email
+                if (!detectedEmail.isNullOrBlank()) {
+                    userEmail = detectedEmail
+                }
                 userUid = user.uid
             }
         }
@@ -118,7 +126,7 @@ fun HomeContent(userName: String, onNavigateToDuel: () -> Unit, onNavigateToBot:
         ) {
             Text("Last Letter", fontSize = 42.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Buktikan kemampuan kosa kata kamu dan jadilah juara!", fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f), textAlign = TextAlign.Center)
+            Text("Buktikan kemampuan kosa kata kamu dan jadilah juara!", fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
@@ -144,7 +152,13 @@ fun HomeContent(userName: String, onNavigateToDuel: () -> Unit, onNavigateToBot:
 }
 
 @Composable
-fun ProfileContent(userName: String, userEmail: String, userUid: String, onNameUpdated: (String) -> Unit, onLogout: () -> Unit) {
+fun ProfileContent(
+    userName: String,
+    userEmail: String,
+    userUid: String,
+    onNameUpdated: (String) -> Unit,
+    onLogout: () -> Unit
+) {
     var isEditing by remember { mutableStateOf(false) }
     var inputName by remember { mutableStateOf(userName) }
     var isSaving by remember { mutableStateOf(false) }
@@ -171,7 +185,7 @@ fun ProfileContent(userName: String, userEmail: String, userUid: String, onNameU
             OutlinedTextField(
                 value = inputName,
                 onValueChange = { inputName = it },
-                label = { Text("Nama Tampilan") },
+                label = { Text("Nama Tampilan Baru") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isSaving
@@ -182,18 +196,21 @@ fun ProfileContent(userName: String, userEmail: String, userUid: String, onNameU
                     onClick = {
                         if (inputName.isNotBlank()) {
                             isSaving = true
-                            val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(inputName.trim()).build()
+                            val profileUpdates = UserProfileChangeRequest.Builder()
+                                .setDisplayName(inputName.trim())
+                                .build()
 
-                            FirebaseAuth.getInstance().currentUser?.updateProfile(profileUpdates)?.addOnCompleteListener { task ->
-                                isSaving = false
-                                if (task.isSuccessful) {
-                                    isEditing = false
-                                    onNameUpdated(inputName.trim())
-                                } else {
-                                    isEditing = false
-                                    inputName = userName
+                            FirebaseAuth.getInstance().currentUser?.updateProfile(profileUpdates)
+                                ?.addOnCompleteListener { task ->
+                                    isSaving = false
+                                    if (task.isSuccessful) {
+                                        isEditing = false
+                                        onNameUpdated(inputName.trim())
+                                    } else {
+                                        isEditing = false
+                                        inputName = userName
+                                    }
                                 }
-                            }
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -216,7 +233,6 @@ fun ProfileContent(userName: String, userEmail: String, userUid: String, onNameU
                     Icon(Icons.Filled.Edit, contentDescription = "Edit Nama", tint = MaterialTheme.colorScheme.primary)
                 }
             }
-            Text("Bagikan nama dan hashtag ini agar temanmu bisa invite!", fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -226,15 +242,19 @@ fun ProfileContent(userName: String, userEmail: String, userUid: String, onNameU
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Email Akun", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text(text = userEmail)
+                Text("Email Akun Terhubung", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(text = userEmail, style = MaterialTheme.typography.bodyLarge)
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // FUNGSI LOGOUT MUTLAK: Keluar dari sesi Firebase & Triger pembersihan stack navigasi utama
         Button(
-            onClick = { FirebaseAuth.getInstance().signOut(); onLogout() },
+            onClick = {
+                FirebaseAuth.getInstance().signOut()
+                onLogout()
+            },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = RoundedCornerShape(12.dp)
@@ -247,7 +267,7 @@ fun ProfileContent(userName: String, userEmail: String, userUid: String, onNameU
 
 @Composable
 fun HistoryContent(viewModel: HistoryViewModel = hiltViewModel()) {
-    val historyList by viewModel.history.collectAsState(initial = emptyList())
+    val historyList by viewModel.history.collectAsState(initial = emptyList<MatchHistoryEntity>())
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -278,12 +298,11 @@ fun HistoryCard(history: MatchHistoryEntity) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
     val dateString = dateFormat.format(Date(history.date))
 
-    // UBAH LOGIKA: Parse string JSON terlebih dahulu sebelum dipanggil ke dalam UI
     val parsedWords = remember(history.wordsPlayedJson) {
         try {
             Json.decodeFromString<List<PlayedWordItem>>(history.wordsPlayedJson)
         } catch (e: Exception) {
-            null // Mengembalikan null jika proses pembacaan JSON gagal
+            null
         }
     }
 
@@ -299,7 +318,7 @@ fun HistoryCard(history: MatchHistoryEntity) {
                     Text(text = "${history.mode} MODE • $dateString", fontSize = 12.sp, color = Color.Gray)
                 }
                 Text(
-                    text = if (history.result == "WIN") "MENANG" else "KALAH",
+                    text = if (history.result == "WIN") "WIN" else "LOSE",
                     fontWeight = FontWeight.ExtraBold,
                     color = if (history.result == "WIN") Color(0xFF4CAF50) else Color(0xFFF44336)
                 )
@@ -314,7 +333,6 @@ fun HistoryCard(history: MatchHistoryEntity) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Detail Kata Dimainkan:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
 
-                    // PEMANGGILAN UI BERDASARKAN HASIL PARSING DI ATAS
                     if (parsedWords != null) {
                         parsedWords.forEach { item ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
@@ -347,8 +365,8 @@ fun BottomNavBar(selectedItem: Int, onItemSelected: (Int) -> Unit) {
     val icons = listOf(Icons.Filled.Home, Icons.Filled.History, Icons.Filled.Person)
 
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         items.forEachIndexed { index, item ->
             NavigationBarItem(

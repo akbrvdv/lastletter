@@ -1,5 +1,7 @@
 package com.kelompok6.lastletter.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +52,12 @@ fun DuelScreen(
 
     val isMyTurn = (isHost && turn == "HOST") || (!isHost && turn == "GUEST")
 
+    // Penanganan sistematis tombol "Back" HP agar room terhapus jika Host keluar
+    BackHandler {
+        viewModel.leaveRoom()
+        navController.popBackStack()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -92,14 +100,15 @@ fun DuelScreen(
                         Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Gabung ke Room", color = bgColorBottom, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(16.dp))
-                            OutlinedTextField(value = inputCode, onValueChange = { inputCode = it.uppercase() }, label = { Text("Kode Room") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            OutlinedTextField(value = inputCode, onValueChange = { inputCode = it.uppercase() }, label = { Text("Kode Room 6 Digit") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(onClick = { viewModel.joinRoom(inputCode) }, enabled = inputCode.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = secondaryPurple), modifier = Modifier.fillMaxWidth().height(50.dp)) {
                                 Text("JOIN ROOM", color = Color.White, fontWeight = FontWeight.Bold)
                             }
-                            if (infoMessage.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(infoMessage, color = Color.Red, fontSize = 12.sp)
+
+                            // Menampilkan pesan error dari Firebase (contoh: Kode salah)
+                            AnimatedVisibility(visible = infoMessage.isNotEmpty()) {
+                                Text(text = infoMessage, color = Color.Red, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp), textAlign = TextAlign.Center)
                             }
                         }
                     }
@@ -122,7 +131,7 @@ fun DuelScreen(
                 }
             }
 
-            // --- 3. LAYAR ARENA BERMAIN (10 DETIK) ---
+            // --- 3. LAYAR ARENA BERMAIN (PVP) ---
             else {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(modifier = Modifier.fillMaxWidth().background(secondaryPurple).padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -183,7 +192,7 @@ fun DuelScreen(
                         onDismissRequest = { },
                         containerColor = Color(0xFF3D1F85),
                         title = { Text(if (isWin) "🏆 KAMU MENANG!" else "💀 GAME OVER", color = Color.White, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
-                        text = { Text("Pertandingan melawan $opponentName telah selesai. Hasil sudah tersimpan di History.", color = Color.LightGray, textAlign = TextAlign.Center) },
+                        text = { Text("Pertandingan PVP selesai. Riwayat sudah disimpan.", color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         confirmButton = {
                             Button(onClick = { viewModel.leaveRoom(); navController.popBackStack() }, colors = ButtonDefaults.buttonColors(containerColor = primaryYellow)) {
                                 Text("KEMBALI KE HOME", color = bgColorBottom, fontWeight = FontWeight.Bold)
