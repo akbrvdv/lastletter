@@ -20,7 +20,12 @@ class WordValidator @Inject constructor(
             return WordValidationResult.EmptyInput
         }
 
-        // Tahap 3: Cek Huruf Awal
+        // Tahap 3: Cek apakah kata SUDAH PERNAH DIPAKAI sebelumnya
+        if (usedWords.contains(cleanedWord)) {
+            return WordValidationResult.AlreadyUsed
+        }
+
+        // Tahap 4: Cek Huruf Awal
         if (!lastWord.isNullOrEmpty()) {
             val expectedLetter = lastWord.trim().lowercase().last()
             if (cleanedWord.first() != expectedLetter) {
@@ -28,13 +33,7 @@ class WordValidator @Inject constructor(
             }
         }
 
-        // Tahap 4: Cek Histori Kata
-        // Menggunakan cleanedWord agar pengecekan case-insensitive dan tanpa spasi
-        if (usedWords.contains(cleanedWord)) {
-            return WordValidationResult.AlreadyUsed
-        }
-
-        // Tahap 5: Cek Kamus Lokal
+        // Tahap 5: Cek Kamus Lokal (Menggunakan fungsi aslimu: isValidWord)
         val isLocalValid = wordDao.isValidWord(cleanedWord)
         if (!isLocalValid) {
             return WordValidationResult.NotInDictionary

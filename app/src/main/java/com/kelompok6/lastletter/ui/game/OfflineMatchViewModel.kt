@@ -2,6 +2,9 @@ package com.kelompok6.lastletter.ui.game
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kelompok6.lastletter.data.local.WordDao
+import com.kelompok6.lastletter.domain.WordValidator
+import com.kelompok6.lastletter.domain.model.WordValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -12,7 +15,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class OfflineMatchViewModel @Inject constructor() : ViewModel() {
+class OfflineMatchViewModel @Inject constructor(
+    private val wordValidator: WordValidator,
+    private val wordDao: WordDao // Inject WordDao untuk Bot mencari kata di KBBI
+) : ViewModel() {
 
     private val _gameStatus = MutableStateFlow("PLAYING")
     val gameStatus: StateFlow<String> = _gameStatus.asStateFlow()
@@ -38,15 +44,6 @@ class OfflineMatchViewModel @Inject constructor() : ViewModel() {
     private var timerJob: Job? = null
     private val usedWords = mutableListOf<String>()
 
-    // Kamus kata untuk Bot
-    private val botDictionary = listOf(
-        "APEL", "LEMARI", "IKAN", "NANAS", "SAPI", "ITIK", "KUCING", "GAJAH",
-        "HARIMAU", "ULAR", "RUSA", "ANGSA", "AYAM", "MONYET", "TIKUS", "SEMUT",
-        "TOPI", "INDONESIA", "ANGGUR", "RUMAH", "HUTAN", "NAGA", "API",
-        "ILMU", "UDANG", "GELANG", "GURITA", "ANGIN", "NILAI", "INTAN",
-        "RAMBUT", "TANGAN", "NANGKA", "ANGKASA", "AWAN", "NYAMUK", "KASUR"
-    )
-
     init {
         startGame()
     }
@@ -60,11 +57,9 @@ class OfflineMatchViewModel @Inject constructor() : ViewModel() {
         _isPlayerTurn.value = true
         _timeLeft.value = 10
 
-        // Timer TIDAK dipanggil di awal agar user punya waktu mikir kata pertama
         timerJob?.cancel()
     }
 
-    // Fungsi Timer Universal (Dipakai untuk Player dan Bot)
     private fun startTimer() {
         timerJob?.cancel()
         _timeLeft.value = 10
@@ -72,94 +67,91 @@ class OfflineMatchViewModel @Inject constructor() : ViewModel() {
         timerJob = viewModelScope.launch {
             while (_timeLeft.value > 0 && _gameStatus.value == "PLAYING") {
                 delay(1000)
-                _timeLeft.value -= 1 // Detik berkurang terus
+                _timeLeft.value -= 1
             }
 
-            // Jika waktu habis dan game masih berjalan
             if (_timeLeft.value <= 0 && _gameStatus.value == "PLAYING") {
                 handleMistake(isPlayer = _isPlayerTurn.value, timeout = true)
             }
         }
     }
 
-    // Fungsi Submit dari UI
     fun submitWord(word: String) {
         val cleanedWord = word.trim().uppercase()
 
         if (cleanedWord.isBlank() || !_isPlayerTurn.value || _gameStatus.value != "PLAYING") return
 
-        val current = _currentWord.value.uppercase()
+        viewModelScope.launch {
+            val current = _currentWord.value
 
-        // 1. Cek apakah kata sudah dipakai (Mengurangi nyawa)
-        if (usedWords.contains(cleanedWord)) {
-            handleMistake(isPlayer = true, timeout = false, errorMessage = "Kata '$cleanedWord' sudah dipakai!")
-            return
-        }
+            val validationResult = wordValidator.validate(
+                inputWord = cleanedWord,
+                lastWord = current.ifEmpty { null },
+                usedWords = usedWords.map { it.lowercase() }.toSet()
+            )
 
-        // 2. Cek apakah huruf pertama sesuai dengan huruf terakhir kata sebelumnya
-        val isValid = if (current.isEmpty()) {
-            true
-        } else {
-            cleanedWord.first() == current.last()
-        }
-
-        if (isValid) {
-            // Jika Benar
-            usedWords.add(cleanedWord)
-            _currentWord.value = cleanedWord
-            _infoMessage.value = ""
-
-            // Oper ke Bot
-            botTurn()
-        } else {
-            // Jika Salah Huruf
-            handleMistake(isPlayer = true, timeout = false, errorMessage = "Harus diawali huruf '${current.last()}'!")
+            when (validationResult) {
+                is WordValidationResult.Success -> {
+                    usedWords.add(cleanedWord)
+                    _currentWord.value = cleanedWord
+                    _infoMessage.value = ""
+                    botTurn()
+                }
+                is WordValidationResult.AlreadyUsed -> {
+                    handleMistake(isPlayer = true, timeout = false, errorMessage = "Kata '$cleanedWord' sudah dipakai!")
+                }
+                is WordValidationResult.InvalidFirstLetter -> {
+                    val expected = validationResult.expectedLetter.uppercaseChar()
+                    handleMistake(isPlayer = true, timeout = false, errorMessage = "Harus diawali huruf '$expected'!")
+                }
+                is WordValidationResult.NotInDictionary -> {
+                    handleMistake(isPlayer = true, timeout = false, errorMessage = "Kata '$cleanedWord' tidak ada di KBBI!")
+                }
+                is WordValidationResult.EmptyInput -> {
+                    // Abaikan input kosong
+                }
+            }
         }
     }
 
-    // Fungsi Logika AI Bot
     private fun botTurn() {
         _isPlayerTurn.value = false
-
-        // JALANKAN TIMER BOT! Agar saat bot berpikir, detiknya tetap berkurang
         startTimer()
 
         viewModelScope.launch {
-            // Bot pura-pura mikir 2 sampai 4 detik
-            val thinkingTime = (2000L..4000L).random()
+            // Waktu mikir bot acak antara 1 sampai 3 detik biar terlihat natural
+            val thinkingTime = (1000L..3000L).random()
             delay(thinkingTime)
 
-            // Jika pas mikir tiba-tiba game udah kelar, batalkan eksekusi
             if (_gameStatus.value != "PLAYING") return@launch
 
-            val currentLastChar = _currentWord.value.last()
+            val currentLastChar = _currentWord.value.last().lowercaseChar().toString()
 
-            // Cari kata yang cocok di kamus bot
-            val possibleWords = botDictionary.filter {
-                it.first() == currentLastChar && !usedWords.contains(it)
-            }
+            // Konversi riwayat kata ke huruf kecil untuk query ke database
+            val usedListLower = usedWords.map { it.lowercase() }
 
-            if (possibleWords.isNotEmpty()) {
-                // Jawaban Bot Ketemu
-                val botWord = possibleWords.random()
-                usedWords.add(botWord)
-                _currentWord.value = botWord
+            // Minta WordDao mencarikan 1 kata dari KBBI yang belum dipakai
+            val botWord = wordDao.getRandomWordStartingWith(currentLastChar, usedListLower)
 
-                // Oper balik ke Player
+            if (botWord != null) {
+                // Bot menemukan kata
+                val finalBotWord = botWord.uppercase()
+                usedWords.add(finalBotWord)
+                _currentWord.value = finalBotWord
+
+                // Kembalikan giliran ke player
                 _isPlayerTurn.value = true
-                startTimer() // Reset timer dan jalankan untuk player
+                startTimer()
             } else {
-                // Bot nyerah / kehabisan kata
+                // Sangat mustahil bot kehabisan kata jika menggunakan DB KBBI, tapi ini jaga-jaga
                 handleMistake(isPlayer = false, timeout = false, errorMessage = "Bot kehabisan kata-kata!")
             }
         }
     }
 
-    // Fungsi Penanganan Salah & Game Over
     private fun handleMistake(isPlayer: Boolean, timeout: Boolean, errorMessage: String? = null) {
-        timerJob?.cancel() // Langsung hentikan timer saat salah
+        timerJob?.cancel()
 
-        // Kurangi nyawa dan set pesan error sementara
         if (isPlayer) {
             _playerLives.value -= 1
             _infoMessage.value = if (timeout) "Waktu Habis!" else (errorMessage ?: "Kata salah!")
@@ -169,31 +161,26 @@ class OfflineMatchViewModel @Inject constructor() : ViewModel() {
         }
 
         viewModelScope.launch {
-            delay(2000) // Tampilkan pesan kesalahan selama 2 detik biar kebaca
+            delay(2000)
 
-            // CEK APAKAH ADA YANG MATI
             if (_playerLives.value <= 0) {
-                // PESAN ANDA KALAH SEBELUM KELUAR
                 _infoMessage.value = "GAME OVER: ANDA KALAH!"
                 delay(2500)
                 _gameStatus.value = "FINISHED"
             } else if (_botLives.value <= 0) {
-                // PESAN ANDA MENANG SEBELUM KELUAR
                 _infoMessage.value = "SELAMAT: ANDA MENANG!"
                 delay(2500)
                 _gameStatus.value = "FINISHED"
             } else {
-                // KALAU MASIH ADA NYAWA, LANJUT RONDE BARU
                 _infoMessage.value = ""
                 _currentWord.value = listOf("RUMAH", "BUMI", "LAMPU", "MEJA", "KURSI").random()
 
-                // Giliran dilempar ke pihak yang TIDAK salah
                 _isPlayerTurn.value = !isPlayer
 
                 if (_isPlayerTurn.value) {
                     startTimer()
                 } else {
-                    botTurn() // Fungsi ini sudah mencakup startTimer() buat bot
+                    botTurn()
                 }
             }
         }

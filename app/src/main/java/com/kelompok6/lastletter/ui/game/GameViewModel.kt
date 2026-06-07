@@ -29,12 +29,11 @@ class GameViewModel @Inject constructor(
 
     private val db = FirebaseDatabase.getInstance().getReference("rooms")
     private val auth = FirebaseAuth.getInstance()
-    private val currentUser = auth.currentUser
 
     private val _roomCode = MutableStateFlow("")
     val roomCode: StateFlow<String> = _roomCode.asStateFlow()
 
-    private val _roomStatus = MutableStateFlow("NONE") // NONE, WAITING, PLAYING, FINISHED
+    private val _roomStatus = MutableStateFlow("NONE")
     val roomStatus: StateFlow<String> = _roomStatus.asStateFlow()
 
     private val _isHost = MutableStateFlow(false)
@@ -74,25 +73,25 @@ class GameViewModel @Inject constructor(
     private var correctWords = 0
     private var wrongWords = 0
 
-    // PERBAIKAN: Fungsi pintar untuk mengambil nama asli, atau potongan dari email jika displayName kosong.
+    // PERBAIKAN: Ambil nama langsung dari auth terbaru agar tidak "Pemain 98"
     private fun getMyName(): String {
-        val name = currentUser?.displayName
+        val user = auth.currentUser
+        user?.reload() // Paksa reload agar data terbaru terbaca
+
+        val name = user?.displayName
         if (!name.isNullOrBlank()) return name
 
-        val email = currentUser?.email
+        val email = user?.email
         if (!email.isNullOrBlank()) {
-            // Contoh: "akbar123@gmail.com" -> menjadi "Akbar123"
             return email.substringBefore("@").replaceFirstChar { it.uppercase() }
         }
-
         return "Pemain " + Random.nextInt(10, 99)
     }
 
-    // 1. HOST MEMBUAT ROOM
     fun createRoom() {
         _isLoading.value = true
         val code = Random.nextInt(100000, 999999).toString()
-        val playerName = getMyName() // Menggunakan fungsi pintar
+        val playerName = getMyName()
 
         val roomData = mapOf(
             "status" to "WAITING",
@@ -124,7 +123,6 @@ class GameViewModel @Inject constructor(
                 viewModelScope.launch { delay(3000); _infoMessage.value = "" }
             }
 
-        // Safety Net
         viewModelScope.launch {
             delay(10000)
             if (!isResolved) {
@@ -135,7 +133,6 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    // 2. GUEST MASUK KE ROOM
     fun joinRoom(code: String) {
         _isLoading.value = true
         var isResolved = false
@@ -149,7 +146,7 @@ class GameViewModel @Inject constructor(
                 _isHost.value = false
                 _turn.value = "HOST"
 
-                val guestName = getMyName() // Menggunakan fungsi pintar
+                val guestName = getMyName()
 
                 val updates = mapOf(
                     "guestName" to guestName,
@@ -171,7 +168,6 @@ class GameViewModel @Inject constructor(
             viewModelScope.launch { delay(3000); _infoMessage.value = "" }
         }
 
-        // Safety Net
         viewModelScope.launch {
             delay(10000)
             if (!isResolved) {
@@ -182,7 +178,6 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    // 3. LISTENER UTAMA MULTIPLAYER
     private fun listenToRoom(code: String) {
         roomListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -197,14 +192,14 @@ class GameViewModel @Inject constructor(
 
                 val status = snapshot.child("status").value.toString()
 
-                // PERBAIKAN: Selalu baca dan update nama dari Firebase setiap ada perubahan
-                val fireHostName = snapshot.child("hostName").value?.toString() ?: ""
-                val fireGuestName = snapshot.child("guestName").value?.toString() ?: ""
+                // PERBAIKAN: Realtime Name Sync
+                val fireHostName = snapshot.child("hostName").value?.toString() ?: "Lawan"
+                val fireGuestName = snapshot.child("guestName").value?.toString() ?: "Lawan"
 
-                if (_isHost.value && fireGuestName.isNotBlank()) {
-                    _opponentName.value = fireGuestName
-                } else if (!_isHost.value && fireHostName.isNotBlank()) {
-                    _opponentName.value = fireHostName
+                if (_isHost.value) {
+                    _opponentName.value = if (fireGuestName.isNotBlank()) fireGuestName else "Menunggu Lawan..."
+                } else {
+                    _opponentName.value = if (fireHostName.isNotBlank()) fireHostName else "Menunggu Lawan..."
                 }
 
                 if (status == "PLAYING" && _roomStatus.value == "WAITING") {
@@ -244,7 +239,6 @@ class GameViewModel @Inject constructor(
         db.child(code).addValueEventListener(roomListener!!)
     }
 
-    // 4. TIMER CONTROL
     private fun manageTimer() {
         if (!_isHost.value) return
 
@@ -262,7 +256,6 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    // 5. INPUT JAWABAN
     fun submitWord(word: String) {
         val cleanedWord = word.trim().lowercase()
         val isMyTurn = (_isHost.value && _turn.value == "HOST") || (!_isHost.value && _turn.value == "GUEST")
@@ -291,13 +284,18 @@ class GameViewModel @Inject constructor(
                 )
                 db.child(_roomCode.value).updateChildren(updates)
             } else {
-                handleMistake(timeout = false)
+                val errorMsg = when (validationResult) {
+                    is WordValidationResult.AlreadyUsed -> "Kata '$cleanedWord' sudah dipakai!"
+                    is WordValidationResult.InvalidFirstLetter -> "Huruf awal harus '${validationResult.expectedLetter.uppercaseChar()}'!"
+                    is WordValidationResult.NotInDictionary -> "Kata '$cleanedWord' tidak ada di KBBI!"
+                    else -> "Jawaban Salah!"
+                }
+                handleMistake(timeout = false, errorMessage = errorMsg)
             }
         }
     }
 
-    // 6. PENANGANAN SALAH JAWAB / WAKTU HABIS
-    private fun handleMistake(timeout: Boolean) {
+    private fun handleMistake(timeout: Boolean, errorMessage: String? = null) {
         val isHostTurn = _turn.value == "HOST"
         val livesRef = if (isHostTurn) "hostLives" else "guestLives"
 
@@ -314,6 +312,9 @@ class GameViewModel @Inject constructor(
         if ((isHostTurn && _isHost.value) || (!isHostTurn && !_isHost.value)) {
             score -= 5
             wrongWords++
+
+            _infoMessage.value = if (timeout) "Waktu Habis!" else (errorMessage ?: "Jawaban Salah!")
+            viewModelScope.launch { delay(2000); _infoMessage.value = "" }
         }
 
         if (newLives <= 0) {

@@ -2,21 +2,27 @@ package com.kelompok6.lastletter.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,12 +51,15 @@ fun DuelScreen(
     var inputCode by remember { mutableStateOf("") }
     var inputWord by remember { mutableStateOf("") }
 
-    val bgColorBottom = Color(0xFF2C165F)
-    val primaryYellow = Color(0xFFFBBC05)
-    val secondaryPurple = Color(0xFF6A2FF9)
+    // --- TEMA GAME BOT ---
+    val DarkPurple = Color(0xFF2D0A59)
+    val MidPurple = Color(0xFF5D12D2)
+    val AccentPurple = Color(0xFF900BFC)
+    val GameWhite = Color(0xFFF4F4F9)
+    val TextPurple = Color(0xFF38087B)
 
     val currentUser = FirebaseAuth.getInstance().currentUser
-    val playerName = currentUser?.displayName ?: "Player"
+    val playerName = currentUser?.displayName ?: currentUser?.email?.substringBefore("@") ?: "Player"
     val context = LocalContext.current
 
     val isMyTurn = (isHost && turn == "HOST") || (!isHost && turn == "GUEST")
@@ -66,158 +75,224 @@ fun DuelScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (roomStatus == "NONE") "Multiplayer" else "Room: $roomCode", color = Color.White, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        viewModel.leaveRoom()
-                        navController.popBackStack()
-                    }) { Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = Color.White) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = bgColorBottom)
-            )
-        },
-        containerColor = bgColorBottom
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-
-            if (roomStatus == "NONE") {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = secondaryPurple)) {
-                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Buat Room Baru", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Buat kode unik dan bagikan ke temanmu!", color = Color.White.copy(alpha = 0.8f), textAlign = TextAlign.Center, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Button(
-                                onClick = { viewModel.createRoom() },
-                                enabled = !isLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = primaryYellow),
-                                modifier = Modifier.fillMaxWidth().height(50.dp)
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(color = bgColorBottom, modifier = Modifier.size(24.dp))
-                                } else {
-                                    Text("CREATE ROOM", color = bgColorBottom, fontWeight = FontWeight.ExtraBold)
-                                }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(colors = listOf(DarkPurple, MidPurple)))
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text(if (roomStatus == "NONE") "Multiplayer PVP" else "Room: $roomCode", color = Color.White, fontWeight = FontWeight.Bold) },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    actions = {
+                        if (roomStatus != "NONE") {
+                            TextButton(onClick = { viewModel.leaveRoom(); navController.popBackStack() }) {
+                                Text("KELUAR", color = Color(0xFFFF5252), fontWeight = FontWeight.Black)
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(32.dp))
-                    Text("ATAU", color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(32.dp))
-                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Gabung ke Room", color = bgColorBottom, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            OutlinedTextField(value = inputCode, onValueChange = { inputCode = it.uppercase() }, label = { Text("Kode Room 6 Digit") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Button(
-                                onClick = { viewModel.joinRoom(inputCode) },
-                                enabled = inputCode.isNotBlank() && !isLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = secondaryPurple),
-                                modifier = Modifier.fillMaxWidth().height(50.dp)
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                } else {
-                                    Text("JOIN ROOM", color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            } // INI ADALAH KURUNG KURAWAL YANG TADI HILANG
-
-            else if (roomStatus == "WAITING") {
-                Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    CircularProgressIndicator(color = primaryYellow)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text("Menunggu Lawan Bergabung...", color = Color.White, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Card(colors = CardDefaults.cardColors(containerColor = secondaryPurple), shape = RoundedCornerShape(16.dp)) {
-                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Kode Room Kamu:", color = Color.White.copy(alpha = 0.8f))
-                            Text(roomCode, color = primaryYellow, fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 8.sp)
-                        }
-                    }
-                }
+                )
             }
+        ) { paddingValues ->
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-            else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Row(modifier = Modifier.fillMaxWidth().background(secondaryPurple).padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(playerName, color = Color.White, fontWeight = FontWeight.Bold)
-                            Row { repeat(playerLives) { Icon(Icons.Filled.Favorite, null, tint = Color.Red, modifier = Modifier.size(20.dp)) } }
+                // STATE 1: BUAT / JOIN ROOM
+                if (roomStatus == "NONE") {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = AccentPurple)) {
+                            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Buat Room Baru", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Buat kode unik dan bagikan ke temanmu!", color = Color.White.copy(alpha = 0.8f), textAlign = TextAlign.Center, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.createRoom() },
+                                    enabled = !isLoading,
+                                    colors = ButtonDefaults.buttonColors(containerColor = GameWhite),
+                                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                                ) {
+                                    if (isLoading) CircularProgressIndicator(color = AccentPurple, modifier = Modifier.size(24.dp))
+                                    else Text("CREATE ROOM", color = AccentPurple, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
                         }
-                        Card(shape = RoundedCornerShape(50), colors = CardDefaults.cardColors(containerColor = if (timeLeft <= 3) Color.Red else primaryYellow)) {
-                            Text("$timeLeft", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = bgColorBottom, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(opponentName, color = Color.White, fontWeight = FontWeight.Bold)
-                            Row { repeat(opponentLives) { Icon(Icons.Filled.Favorite, null, tint = Color.Red, modifier = Modifier.size(20.dp)) } }
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Text("ATAU", color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = GameWhite)) {
+                            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Gabung ke Room", color = TextPurple, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                OutlinedTextField(
+                                    value = inputCode, onValueChange = { inputCode = it.uppercase() },
+                                    label = { Text("Kode Room 6 Digit") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.joinRoom(inputCode) },
+                                    enabled = inputCode.isNotBlank() && !isLoading,
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
+                                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                                ) {
+                                    if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                    else Text("JOIN ROOM", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
+                }
 
-                    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(if (currentWord.isEmpty()) "Game Dimulai!" else "Kata Sebelumnya:", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(if (currentWord.isEmpty()) "MULAI" else currentWord.uppercase(), color = primaryYellow, fontSize = 40.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                // STATE 2: MENUNGGU LAWAN
+                else if (roomStatus == "WAITING") {
+                    Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        CircularProgressIndicator(color = GameWhite)
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text("Menunggu Lawan Bergabung...", color = Color.White, fontSize = 18.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Card(colors = CardDefaults.cardColors(containerColor = AccentPurple), shape = RoundedCornerShape(16.dp)) {
+                            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Kode Room Kamu:", color = Color.White.copy(alpha = 0.8f))
+                                Text(roomCode, color = GameWhite, fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 8.sp)
+                            }
+                        }
+                    }
+                }
+
+                // STATE 3 & 4: PLAYING & FINISHED (MIRIP BOT SCREEN)
+                else {
+                    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+
+                        // 1. PAPAN SKOR
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = GameWhite),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("ANDA", fontWeight = FontWeight.Black, color = TextPurple, fontSize = 16.sp)
+                                    Row {
+                                        repeat(3) { index -> Icon(Icons.Default.Favorite, contentDescription = "Nyawa", tint = if (index < playerLives) Color(0xFFFF1744) else Color(0xFFE0E0E0), modifier = Modifier.size(28.dp)) }
+                                    }
+                                }
+                                Box(modifier = Modifier.clip(CircleShape).background(AccentPurple).padding(horizontal = 14.dp, vertical = 8.dp)) {
+                                    Text("VS", color = Color.White, fontWeight = FontWeight.Black, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(opponentName, fontWeight = FontWeight.Black, color = TextPurple, fontSize = 16.sp)
+                                    Row {
+                                        repeat(3) { index -> Icon(Icons.Default.Favorite, contentDescription = "Nyawa", tint = if (index < opponentLives) Color(0xFFFF1744) else Color(0xFFE0E0E0), modifier = Modifier.size(28.dp)) }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // 2. TIMER BESAR
+                        val timerColor by animateColorAsState(targetValue = if (timeLeft <= 5) Color(0xFFFF5252) else Color.White, label = "timerColor")
+                        Text(
+                            text = "00:${timeLeft.toString().padStart(2, '0')}",
+                            fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, color = timerColor,
+                            style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.3f), blurRadius = 8f))
+                        )
+
+                        Text(
+                            text = if (isMyTurn) "GILIRAN ANDA!" else "GILIRAN $opponentName...",
+                            fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                            color = if (isMyTurn) Color(0xFF00E676) else Color(0xFFFFD600)
+                        )
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // 3. AREA KATA (KARTU PUTIH BESAR)
+                        Card(
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            shape = RoundedCornerShape(32.dp),
+                            colors = CardDefaults.cardColors(containerColor = GameWhite),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "KATA SEBELUMNYA", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPurple.copy(alpha = 0.6f))
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    val wordToShow = currentWord.ifEmpty { "MULAI" }.uppercase()
+                                    val annotatedString = buildAnnotatedString {
+                                        if (wordToShow.length > 1 && wordToShow != "MULAI") {
+                                            append(wordToShow.dropLast(1))
+                                            withStyle(style = SpanStyle(color = AccentPurple, fontWeight = FontWeight.Black)) {
+                                                append(wordToShow.takeLast(1))
+                                            }
+                                        } else { append(wordToShow) }
+                                    }
+                                    Text(text = annotatedString, fontSize = 48.sp, fontWeight = FontWeight.Black, color = TextPurple, letterSpacing = 4.sp)
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        Card(colors = CardDefaults.cardColors(containerColor = if (isMyTurn && roomStatus == "PLAYING") primaryYellow.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.1f)), shape = RoundedCornerShape(16.dp)) {
-                            val msg = if (roomStatus == "FINISHED") "Permainan Selesai!"
-                            else if (isMyTurn) (if (currentWord.isEmpty()) "Giliranmu! Ketik kata pertama." else "GILIRAN KAMU!\nAwalan: '${currentWord.last().uppercaseChar()}'")
-                            else "Giliran $opponentName..."
-                            Text(msg, color = if (isMyTurn) primaryYellow else Color.White, modifier = Modifier.padding(16.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                        // 4. PESAN ERROR
+                        if (infoMessage.isNotEmpty()) {
+                            Surface(color = Color(0xFFFF5252), shape = RoundedCornerShape(12.dp), modifier = Modifier.padding(bottom = 16.dp)) {
+                                Text(text = infoMessage, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                            }
                         }
-                    }
 
-                    Surface(color = secondaryPurple, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
+                        // 5. INPUT DAN TOMBOL KIRIM
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            TextField(
                                 value = inputWord,
-                                onValueChange = { inputWord = it.split("\\s+".toRegex()).firstOrNull() ?: "" },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("Ketik 1 kata...", color = Color.LightGray) },
-                                singleLine = true,
+                                onValueChange = { inputWord = it.uppercase() },
+                                placeholder = { Text(text = if (isMyTurn) "Ketik kata..." else "Tunggu...", color = TextPurple.copy(alpha = 0.5f)) },
                                 enabled = isMyTurn && roomStatus == "PLAYING",
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
                                 shape = RoundedCornerShape(24.dp),
-                                colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = bgColorBottom, unfocusedContainerColor = bgColorBottom, focusedBorderColor = primaryYellow, unfocusedBorderColor = Color.Transparent, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = GameWhite, unfocusedContainerColor = GameWhite,
+                                    disabledContainerColor = GameWhite.copy(alpha = 0.7f), focusedTextColor = TextPurple,
+                                    unfocusedTextColor = TextPurple, focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             )
+
                             Spacer(modifier = Modifier.width(12.dp))
+
                             FloatingActionButton(
                                 onClick = {
                                     if (inputWord.isNotBlank()) { viewModel.submitWord(inputWord); inputWord = "" }
                                 },
-                                containerColor = primaryYellow, contentColor = bgColorBottom, modifier = Modifier.size(56.dp)
-                            ) { Icon(Icons.Filled.Send, contentDescription = "Kirim") }
+                                containerColor = if (isMyTurn && inputWord.isNotBlank() && roomStatus == "PLAYING") AccentPurple else Color(0xFFBDBDBD),
+                                shape = CircleShape
+                            ) { Icon(Icons.Default.Send, contentDescription = "Kirim Kata", tint = Color.White, modifier = Modifier.size(24.dp)) }
                         }
                     }
-                }
 
-                if (roomStatus == "FINISHED") {
-                    val isWin = playerLives > 0
-                    AlertDialog(
-                        onDismissRequest = { },
-                        containerColor = Color(0xFF3D1F85),
-                        title = { Text(if (isWin) "🏆 KAMU MENANG!" else "💀 GAME OVER", color = Color.White, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
-                        text = { Text("Pertandingan PVP selesai. Riwayat sudah disimpan.", color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-                        confirmButton = {
-                            Button(onClick = { viewModel.leaveRoom(); navController.popBackStack() }, colors = ButtonDefaults.buttonColors(containerColor = primaryYellow)) {
-                                Text("KEMBALI KE HOME", color = bgColorBottom, fontWeight = FontWeight.Bold)
+                    // MODAL DIALOG KETIKA SELESAI
+                    if (roomStatus == "FINISHED") {
+                        val isWin = playerLives > opponentLives
+                        AlertDialog(
+                            onDismissRequest = { },
+                            containerColor = GameWhite,
+                            title = { Text(if (isWin) "🏆 KAMU MENANG!" else "💀 GAME OVER", color = TextPurple, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+                            text = { Text("Pertandingan melawan $opponentName selesai.", color = TextPurple.copy(alpha = 0.8f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                            confirmButton = {
+                                Button(onClick = { viewModel.leaveRoom(); navController.popBackStack() }, colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)) {
+                                    Text("KEMBALI KE HOME", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
