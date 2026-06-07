@@ -2,7 +2,11 @@ package com.kelompok6.lastletter.ui.game
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.kelompok6.lastletter.data.local.WordDao
+import com.kelompok6.lastletter.data.local.entity.MatchHistoryEntity
+import com.kelompok6.lastletter.data.local.entity.PlayedWordItem
+import com.kelompok6.lastletter.data.repository.MatchHistoryRepository
 import com.kelompok6.lastletter.domain.WordValidator
 import com.kelompok6.lastletter.domain.model.WordValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,12 +16,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 @HiltViewModel
 class OfflineMatchViewModel @Inject constructor(
     private val wordValidator: WordValidator,
-    private val wordDao: WordDao // Inject WordDao untuk Bot mencari kata di KBBI
+    private val wordDao: WordDao, // Inject WordDao untuk Bot mencari kata di KBBI
+    private val historyRepository: MatchHistoryRepository // DITAMBAHKAN: Untuk simpan riwayat
 ) : ViewModel() {
 
     private val _gameStatus = MutableStateFlow("PLAYING")
@@ -35,7 +42,7 @@ class OfflineMatchViewModel @Inject constructor(
     private val _botLives = MutableStateFlow(3)
     val botLives: StateFlow<Int> = _botLives.asStateFlow()
 
-    private val _timeLeft = MutableStateFlow(10)
+    private val _timeLeft = MutableStateFlow(15) // DITAMBAHKAN: Ubah jadi 15 Detik
     val timeLeft: StateFlow<Int> = _timeLeft.asStateFlow()
 
     private val _infoMessage = MutableStateFlow("")
@@ -43,6 +50,12 @@ class OfflineMatchViewModel @Inject constructor(
 
     private var timerJob: Job? = null
     private val usedWords = mutableListOf<String>()
+
+    // DITAMBAHKAN: Variabel pelacakan untuk History
+    private val playedWordsList = mutableListOf<PlayedWordItem>()
+    private var score = 0
+    private var correctWords = 0
+    private var wrongWords = 0
 
     init {
         startGame()
@@ -54,15 +67,19 @@ class OfflineMatchViewModel @Inject constructor(
         _botLives.value = 3
         _currentWord.value = ""
         usedWords.clear()
+        playedWordsList.clear()
+        score = 0
+        correctWords = 0
+        wrongWords = 0
         _isPlayerTurn.value = true
-        _timeLeft.value = 10
+        _timeLeft.value = 15 // DITAMBAHKAN: Ubah jadi 15 Detik
 
         timerJob?.cancel()
     }
 
     private fun startTimer() {
         timerJob?.cancel()
-        _timeLeft.value = 10
+        _timeLeft.value = 15 // DITAMBAHKAN: Ubah jadi 15 Detik
 
         timerJob = viewModelScope.launch {
             while (_timeLeft.value > 0 && _gameStatus.value == "PLAYING") {
@@ -93,18 +110,24 @@ class OfflineMatchViewModel @Inject constructor(
             when (validationResult) {
                 is WordValidationResult.Success -> {
                     usedWords.add(cleanedWord)
+                    playedWordsList.add(PlayedWordItem(cleanedWord, isCorrect = true, isTimeout = false)) // Record history
+                    score += 10
+                    correctWords++
                     _currentWord.value = cleanedWord
                     _infoMessage.value = ""
                     botTurn()
                 }
                 is WordValidationResult.AlreadyUsed -> {
+                    playedWordsList.add(PlayedWordItem(cleanedWord, isCorrect = false, isTimeout = false))
                     handleMistake(isPlayer = true, timeout = false, errorMessage = "Kata '$cleanedWord' sudah dipakai!")
                 }
                 is WordValidationResult.InvalidFirstLetter -> {
+                    playedWordsList.add(PlayedWordItem(cleanedWord, isCorrect = false, isTimeout = false))
                     val expected = validationResult.expectedLetter.uppercaseChar()
                     handleMistake(isPlayer = true, timeout = false, errorMessage = "Harus diawali huruf '$expected'!")
                 }
                 is WordValidationResult.NotInDictionary -> {
+                    playedWordsList.add(PlayedWordItem(cleanedWord, isCorrect = false, isTimeout = false))
                     handleMistake(isPlayer = true, timeout = false, errorMessage = "Kata '$cleanedWord' tidak ada di KBBI!")
                 }
                 is WordValidationResult.EmptyInput -> {
@@ -137,6 +160,8 @@ class OfflineMatchViewModel @Inject constructor(
                 // Bot menemukan kata
                 val finalBotWord = botWord.uppercase()
                 usedWords.add(finalBotWord)
+                playedWordsList.add(PlayedWordItem(finalBotWord, isCorrect = true, isTimeout = false)) // Record history bot
+
                 _currentWord.value = finalBotWord
 
                 // Kembalikan giliran ke player
@@ -154,9 +179,14 @@ class OfflineMatchViewModel @Inject constructor(
 
         if (isPlayer) {
             _playerLives.value -= 1
+            score -= 5
+            wrongWords++
+            if (timeout) playedWordsList.add(PlayedWordItem("-", isCorrect = false, isTimeout = true)) // Record timeout
+
             _infoMessage.value = if (timeout) "Waktu Habis!" else (errorMessage ?: "Kata salah!")
         } else {
             _botLives.value -= 1
+            if (timeout) playedWordsList.add(PlayedWordItem("-", isCorrect = false, isTimeout = true))
             _infoMessage.value = if (timeout) "Waktu Bot Habis!" else (errorMessage ?: "Bot kehabisan kata!")
         }
 
@@ -167,10 +197,12 @@ class OfflineMatchViewModel @Inject constructor(
                 _infoMessage.value = "GAME OVER: ANDA KALAH!"
                 delay(2500)
                 _gameStatus.value = "FINISHED"
+                saveHistory() // DITAMBAHKAN: Simpan sejarah sebelum selesai
             } else if (_botLives.value <= 0) {
                 _infoMessage.value = "SELAMAT: ANDA MENANG!"
                 delay(2500)
                 _gameStatus.value = "FINISHED"
+                saveHistory() // DITAMBAHKAN: Simpan sejarah sebelum selesai
             } else {
                 _infoMessage.value = ""
                 _currentWord.value = listOf("RUMAH", "BUMI", "LAMPU", "MEJA", "KURSI").random()
@@ -183,6 +215,30 @@ class OfflineMatchViewModel @Inject constructor(
                     botTurn()
                 }
             }
+        }
+    }
+
+    // Fungsi untuk Push History ke Database Room Lokal
+    private fun saveHistory() {
+        if (playedWordsList.isEmpty()) return
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "GUEST_USER"
+
+        viewModelScope.launch {
+            val isWin = _playerLives.value > 0
+            val finalScore = if (isWin) score + 50 else score
+
+            val history = MatchHistoryEntity(
+                userId = uid,
+                date = System.currentTimeMillis(),
+                mode = "BOT OFFLINE",
+                opponent = "AI BOT",
+                result = if (isWin) "WIN" else "LOSE",
+                score = finalScore,
+                correctWords = correctWords,
+                wrongWords = wrongWords,
+                wordsPlayedJson = Json.encodeToString(playedWordsList)
+            )
+            historyRepository.insertHistory(history)
         }
     }
 }

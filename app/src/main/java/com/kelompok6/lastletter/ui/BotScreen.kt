@@ -203,6 +203,16 @@ fun BotScreen(
 
                             val wordToShow = currentWord.ifEmpty { "MULAI" }.uppercase()
 
+                            // DITAMBAHKAN: Logika Dynamic Font Sizing agar kata panjang tidak terpotong (overflow)
+                            val dynamicFontSize = when {
+                                wordToShow.length >= 14 -> 22.sp
+                                wordToShow.length in 10..13 -> 30.sp
+                                wordToShow.length in 7..9 -> 38.sp
+                                else -> 48.sp
+                            }
+
+                            val dynamicLetterSpacing = if (wordToShow.length >= 10) 1.sp else 4.sp
+
                             // Highlight Huruf Terakhir dengan warna Ungu Neon
                             val annotatedString = buildAnnotatedString {
                                 if (wordToShow.length > 1 && wordToShow != "MULAI") {
@@ -217,10 +227,12 @@ fun BotScreen(
 
                             Text(
                                 text = annotatedString,
-                                fontSize = 48.sp,
+                                fontSize = dynamicFontSize, // Menggunakan ukuran dinamis
                                 fontWeight = FontWeight.Black,
                                 color = TextPurple,
-                                letterSpacing = 4.sp
+                                letterSpacing = dynamicLetterSpacing, // Spasi merapat jika kata panjang
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
