@@ -46,7 +46,7 @@ class GameViewModel @Inject constructor(
     private val _currentWord = MutableStateFlow("")
     val currentWord: StateFlow<String> = _currentWord.asStateFlow()
 
-    private val _turn = MutableStateFlow("HOST") // HOST atau GUEST
+    private val _turn = MutableStateFlow("HOST")
     val turn: StateFlow<String> = _turn.asStateFlow()
 
     private val _playerLives = MutableStateFlow(3)
@@ -61,10 +61,11 @@ class GameViewModel @Inject constructor(
     private val _infoMessage = MutableStateFlow("")
     val infoMessage: StateFlow<String> = _infoMessage.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private var roomListener: ValueEventListener? = null
     private var timerJob: Job? = null
-
-    // Timer lokal untuk memastikan host mengendalikan waktu agar tidak terjadi tabrakan Firebase
     private var localTimerJob: Job? = null
 
     private val usedWords = mutableListOf<String>()
@@ -73,15 +74,25 @@ class GameViewModel @Inject constructor(
     private var correctWords = 0
     private var wrongWords = 0
 
+    // PERBAIKAN: Fungsi pintar untuk mengambil nama asli, atau potongan dari email jika displayName kosong.
+    private fun getMyName(): String {
+        val name = currentUser?.displayName
+        if (!name.isNullOrBlank()) return name
+
+        val email = currentUser?.email
+        if (!email.isNullOrBlank()) {
+            // Contoh: "akbar123@gmail.com" -> menjadi "Akbar123"
+            return email.substringBefore("@").replaceFirstChar { it.uppercase() }
+        }
+
+        return "Pemain " + Random.nextInt(10, 99)
+    }
+
     // 1. HOST MEMBUAT ROOM
     fun createRoom() {
+        _isLoading.value = true
         val code = Random.nextInt(100000, 999999).toString()
-        _roomCode.value = code
-        _isHost.value = true
-        _roomStatus.value = "WAITING"
-        _turn.value = "HOST"
-
-        val playerName = currentUser?.displayName ?: "Player 1"
+        val playerName = getMyName() // Menggunakan fungsi pintar
 
         val roomData = mapOf(
             "status" to "WAITING",
@@ -93,25 +104,53 @@ class GameViewModel @Inject constructor(
             "turn" to "HOST",
             "timeLeft" to 15
         )
+
+        var isResolved = false
+
         db.child(code).setValue(roomData)
-        listenToRoom(code)
+            .addOnSuccessListener {
+                isResolved = true
+                _isLoading.value = false
+                _roomCode.value = code
+                _isHost.value = true
+                _roomStatus.value = "WAITING"
+                _turn.value = "HOST"
+                listenToRoom(code)
+            }
+            .addOnFailureListener { error ->
+                isResolved = true
+                _isLoading.value = false
+                _infoMessage.value = "Gagal membuat room: ${error.message}"
+                viewModelScope.launch { delay(3000); _infoMessage.value = "" }
+            }
+
+        // Safety Net
+        viewModelScope.launch {
+            delay(10000)
+            if (!isResolved) {
+                _isLoading.value = false
+                _infoMessage.value = "Waktu habis. Cek koneksi internetmu!"
+                viewModelScope.launch { delay(3000); _infoMessage.value = "" }
+            }
+        }
     }
 
     // 2. GUEST MASUK KE ROOM
     fun joinRoom(code: String) {
+        _isLoading.value = true
+        var isResolved = false
+
         val roomRef = db.child(code)
         roomRef.get().addOnSuccessListener { snapshot ->
+            isResolved = true
+            _isLoading.value = false
             if (snapshot.exists() && snapshot.child("status").value == "WAITING") {
                 _roomCode.value = code
                 _isHost.value = false
-                _turn.value = "HOST" // Giliran pertama selalu Host
+                _turn.value = "HOST"
 
-                val hostName = snapshot.child("hostName").value.toString()
-                _opponentName.value = hostName
+                val guestName = getMyName() // Menggunakan fungsi pintar
 
-                val guestName = currentUser?.displayName ?: "Player 2"
-
-                // Memicu trigger PLAYING di Firebase
                 val updates = mapOf(
                     "guestName" to guestName,
                     "status" to "PLAYING"
@@ -122,12 +161,24 @@ class GameViewModel @Inject constructor(
                     listenToRoom(code)
                 }
             } else {
-                _infoMessage.value = "Kode Room tidak valid atau Room penuh!"
-                // Auto hapus pesan error setelah 3 detik
+                _infoMessage.value = "Kode Room tidak valid atau penuh!"
                 viewModelScope.launch { delay(3000); _infoMessage.value = "" }
             }
-        }.addOnFailureListener {
-            _infoMessage.value = "Gagal menghubungi server!"
+        }.addOnFailureListener { error ->
+            isResolved = true
+            _isLoading.value = false
+            _infoMessage.value = "Gagal terhubung ke server: ${error.message}"
+            viewModelScope.launch { delay(3000); _infoMessage.value = "" }
+        }
+
+        // Safety Net
+        viewModelScope.launch {
+            delay(10000)
+            if (!isResolved) {
+                _isLoading.value = false
+                _infoMessage.value = "Waktu habis. Cek koneksi internetmu!"
+                viewModelScope.launch { delay(3000); _infoMessage.value = "" }
+            }
         }
     }
 
@@ -136,9 +187,9 @@ class GameViewModel @Inject constructor(
         roomListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!snapshot.exists()) {
-                    // Jika data terhapus mendadak (Host keluar)
                     if (_roomStatus.value != "FINISHED") {
                         _infoMessage.value = "Room ditutup oleh Host."
+                        viewModelScope.launch { delay(3000); _infoMessage.value = "" }
                         leaveRoom()
                     }
                     return
@@ -146,31 +197,36 @@ class GameViewModel @Inject constructor(
 
                 val status = snapshot.child("status").value.toString()
 
-                if (status == "PLAYING" && _roomStatus.value == "WAITING") {
-                    // Host menyadari Guest masuk!
-                    _roomStatus.value = "PLAYING"
-                    _opponentName.value = snapshot.child("guestName").value.toString()
+                // PERBAIKAN: Selalu baca dan update nama dari Firebase setiap ada perubahan
+                val fireHostName = snapshot.child("hostName").value?.toString() ?: ""
+                val fireGuestName = snapshot.child("guestName").value?.toString() ?: ""
+
+                if (_isHost.value && fireGuestName.isNotBlank()) {
+                    _opponentName.value = fireGuestName
+                } else if (!_isHost.value && fireHostName.isNotBlank()) {
+                    _opponentName.value = fireHostName
                 }
+
+                if (status == "PLAYING" && _roomStatus.value == "WAITING") {
+                    _roomStatus.value = "PLAYING"
+                }
+
+                val hLives = snapshot.child("hostLives").value.toString().toIntOrNull() ?: 3
+                val gLives = snapshot.child("guestLives").value.toString().toIntOrNull() ?: 3
+
+                _playerLives.value = if (_isHost.value) hLives else gLives
+                _opponentLives.value = if (_isHost.value) gLives else hLives
 
                 if (status == "PLAYING") {
                     val fireWord = snapshot.child("currentWord").value.toString()
                     val fireTurn = snapshot.child("turn").value.toString()
 
-                    // Hindari loop tak terbatas saat mengetik
                     if (_currentWord.value != fireWord) _currentWord.value = fireWord
                     _turn.value = fireTurn
 
-                    val hLives = snapshot.child("hostLives").value.toString().toIntOrNull() ?: 3
-                    val gLives = snapshot.child("guestLives").value.toString().toIntOrNull() ?: 3
-
-                    _playerLives.value = if (_isHost.value) hLives else gLives
-                    _opponentLives.value = if (_isHost.value) gLives else hLives
-
-                    // Sinkronisasi Timer dari Firebase
                     val fireTime = snapshot.child("timeLeft").value.toString().toIntOrNull() ?: 15
                     _timeLeft.value = fireTime
 
-                    // Host bertanggung jawab menurunkan waktu agar tidak terjadi dobel hitungan
                     if (_isHost.value) manageTimer()
                 } else if (status == "FINISHED" && _roomStatus.value != "FINISHED") {
                     _roomStatus.value = "FINISHED"
@@ -179,14 +235,18 @@ class GameViewModel @Inject constructor(
                     localTimerJob?.cancel()
                 }
             }
-            override fun onCancelled(error: DatabaseError) {}
+            override fun onCancelled(error: DatabaseError) {
+                _infoMessage.value = "Koneksi database terputus: ${error.message}"
+                viewModelScope.launch { delay(3000); _infoMessage.value = "" }
+                leaveRoom()
+            }
         }
         db.child(code).addValueEventListener(roomListener!!)
     }
 
-    // 4. TIMER CONTROL (Hanya dijalankan oleh HOST untuk update Firebase)
+    // 4. TIMER CONTROL
     private fun manageTimer() {
-        if (!_isHost.value) return // Guest hanya membaca waktu, tidak menguranginya di database
+        if (!_isHost.value) return
 
         localTimerJob?.cancel()
         if (_roomStatus.value == "PLAYING") {
@@ -196,21 +256,20 @@ class GameViewModel @Inject constructor(
                     val newTime = _timeLeft.value - 1
                     db.child(_roomCode.value).child("timeLeft").setValue(newTime)
                 } else {
-                    // Waktu habis, siapa yang kena denda?
                     handleMistake(timeout = true)
                 }
             }
         }
     }
 
-    // 5. INPUT JAWABAN (Baik Host maupun Guest)
+    // 5. INPUT JAWABAN
     fun submitWord(word: String) {
         val cleanedWord = word.trim().lowercase()
         val isMyTurn = (_isHost.value && _turn.value == "HOST") || (!_isHost.value && _turn.value == "GUEST")
 
         if (!isMyTurn || _roomStatus.value != "PLAYING") return
 
-        localTimerJob?.cancel() // Pause timer lokal saat mengecek kata
+        localTimerJob?.cancel()
 
         viewModelScope.launch {
             val cw = _currentWord.value
@@ -239,11 +298,9 @@ class GameViewModel @Inject constructor(
 
     // 6. PENANGANAN SALAH JAWAB / WAKTU HABIS
     private fun handleMistake(timeout: Boolean) {
-        // Tentukan nyawa siapa yang dikurangi berdasarkan siapa yang sedang jalan (Turn)
         val isHostTurn = _turn.value == "HOST"
         val livesRef = if (isHostTurn) "hostLives" else "guestLives"
 
-        // Ambil sisa nyawa saat ini
         val currentLives = if (isHostTurn) {
             if (_isHost.value) _playerLives.value else _opponentLives.value
         } else {
@@ -254,22 +311,23 @@ class GameViewModel @Inject constructor(
 
         if (timeout) playedWordsList.add(PlayedWordItem("-", false, true))
 
-        // Catat statistik jika kita yang salah
         if ((isHostTurn && _isHost.value) || (!isHostTurn && !_isHost.value)) {
             score -= 5
             wrongWords++
         }
 
         if (newLives <= 0) {
-            db.child(_roomCode.value).child("status").setValue("FINISHED")
-            db.child(_roomCode.value).child(livesRef).setValue(0)
+            val finalUpdates = mapOf(
+                "status" to "FINISHED",
+                livesRef to 0
+            )
+            db.child(_roomCode.value).updateChildren(finalUpdates)
         } else {
             val nextTurn = if (isHostTurn) "GUEST" else "HOST"
             val updates = mapOf(
                 livesRef to newLives,
                 "turn" to nextTurn,
                 "timeLeft" to 15,
-                // Beri kata pancingan gampang kalau timeout/salah agar game tidak macet
                 "currentWord" to listOf("RUMAH", "BUMI", "LAMPU", "MEJA").random()
             )
             db.child(_roomCode.value).updateChildren(updates)
@@ -279,7 +337,7 @@ class GameViewModel @Inject constructor(
     private fun saveHistory() {
         if (playedWordsList.isEmpty()) return
         viewModelScope.launch {
-            val isWin = _playerLives.value > 0
+            val isWin = _playerLives.value > _opponentLives.value
             val finalScore = if (isWin) score + 50 else score
 
             val history = MatchHistoryEntity(
@@ -305,12 +363,13 @@ class GameViewModel @Inject constructor(
             roomListener?.let { db.child(_roomCode.value).removeEventListener(it) }
 
             if (_isHost.value) {
-                // Host keluar -> Hancurkan room
                 db.child(_roomCode.value).removeValue()
             } else if (_roomStatus.value == "PLAYING") {
-                // Guest keluar di tengah game -> Beri kemenangan ke Host
-                db.child(_roomCode.value).child("status").setValue("FINISHED")
-                db.child(_roomCode.value).child("guestLives").setValue(0)
+                val leaveUpdates = mapOf(
+                    "status" to "FINISHED",
+                    "guestLives" to 0
+                )
+                db.child(_roomCode.value).updateChildren(leaveUpdates)
             }
         }
         _roomStatus.value = "NONE"

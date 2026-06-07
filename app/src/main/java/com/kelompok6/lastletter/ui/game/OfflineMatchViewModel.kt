@@ -2,13 +2,6 @@ package com.kelompok6.lastletter.ui.game
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
-import com.kelompok6.lastletter.data.local.entity.MatchHistoryEntity
-import com.kelompok6.lastletter.data.local.entity.PlayedWordItem
-import com.kelompok6.lastletter.data.repository.MatchHistoryRepository
-import com.kelompok6.lastletter.data.repository.WordRepository
-import com.kelompok6.lastletter.domain.WordValidator
-import com.kelompok6.lastletter.domain.model.WordValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -16,22 +9,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 @HiltViewModel
-class OfflineMatchViewModel @Inject constructor(
-    private val wordRepository: WordRepository,
-    private val historyRepository: MatchHistoryRepository,
-    private val wordValidator: WordValidator
-) : ViewModel() {
+class OfflineMatchViewModel @Inject constructor() : ViewModel() {
+
+    private val _gameStatus = MutableStateFlow("PLAYING")
+    val gameStatus: StateFlow<String> = _gameStatus.asStateFlow()
 
     private val _currentWord = MutableStateFlow("")
     val currentWord: StateFlow<String> = _currentWord.asStateFlow()
 
-    private val _turn = MutableStateFlow("PLAYER")
-    val turn: StateFlow<String> = _turn.asStateFlow()
+    private val _isPlayerTurn = MutableStateFlow(true)
+    val isPlayerTurn: StateFlow<Boolean> = _isPlayerTurn.asStateFlow()
 
     private val _playerLives = MutableStateFlow(3)
     val playerLives: StateFlow<Int> = _playerLives.asStateFlow()
@@ -39,178 +29,173 @@ class OfflineMatchViewModel @Inject constructor(
     private val _botLives = MutableStateFlow(3)
     val botLives: StateFlow<Int> = _botLives.asStateFlow()
 
-    private val _status = MutableStateFlow("Playing")
-    val status: StateFlow<String> = _status.asStateFlow()
-
-    private val _winner = MutableStateFlow("")
-    val winner: StateFlow<String> = _winner.asStateFlow()
-
-    private val _usedWords = MutableStateFlow<List<String>>(emptyList())
-    val usedWords: StateFlow<List<String>> = _usedWords.asStateFlow()
-
-    private val _timeLeft = MutableStateFlow(15)
+    private val _timeLeft = MutableStateFlow(10)
     val timeLeft: StateFlow<Int> = _timeLeft.asStateFlow()
 
-    private var timerJob: Job? = null
-    private var score = 0
-    private var correctWordsCount = 0
-    private var wrongWordsCount = 0
-    private val playedWordsList = mutableListOf<PlayedWordItem>()
+    private val _infoMessage = MutableStateFlow("")
+    val infoMessage: StateFlow<String> = _infoMessage.asStateFlow()
 
-    // Daftar kata super gampang jika pemain stuck/salah
-    private val easyWords = listOf("BUMI", "RUMAH", "KASUR", "LAMPU", "MEJA", "KURSI", "PINTU", "GELAS", "BOTOL", "KIPAS")
+    private var timerJob: Job? = null
+    private val usedWords = mutableListOf<String>()
+
+    // Kamus kata untuk Bot
+    private val botDictionary = listOf(
+        "APEL", "LEMARI", "IKAN", "NANAS", "SAPI", "ITIK", "KUCING", "GAJAH",
+        "HARIMAU", "ULAR", "RUSA", "ANGSA", "AYAM", "MONYET", "TIKUS", "SEMUT",
+        "TOPI", "INDONESIA", "ANGGUR", "RUMAH", "HUTAN", "NAGA", "API",
+        "ILMU", "UDANG", "GELANG", "GURITA", "ANGIN", "NILAI", "INTAN",
+        "RAMBUT", "TANGAN", "NANGKA", "ANGKASA", "AWAN", "NYAMUK", "KASUR"
+    )
 
     init {
-        startPlayerTurn()
+        startGame()
     }
 
-    private fun startPlayerTurn() {
-        _turn.value = "PLAYER"
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            _timeLeft.value = 15
-            while (_timeLeft.value > 0) {
-                delay(1000)
-                _timeLeft.value -= 1
-            }
-            handlePlayerMistake(timeout = true)
-        }
-    }
-
-    fun submitWord(word: String) {
-        timerJob?.cancel()
-        viewModelScope.launch {
-            val cleanedWord = word.trim().lowercase()
-            val cw = _currentWord.value
-
-            val validationResult = wordValidator.validate(
-                inputWord = cleanedWord,
-                lastWord = cw.ifEmpty { null },
-                usedWords = _usedWords.value.toSet()
-            )
-
-            val isValid = validationResult is WordValidationResult.Success
-
-            playedWordsList.add(
-                PlayedWordItem(
-                    word = cleanedWord.ifEmpty { "-" },
-                    isCorrect = isValid,
-                    isTimeout = cleanedWord.isEmpty()
-                )
-            )
-
-            if (isValid) {
-                _usedWords.value = _usedWords.value + cleanedWord
-                _currentWord.value = cleanedWord
-                score += 10
-                correctWordsCount++
-                startBotTurn()
-            } else {
-                handlePlayerMistake(timeout = false)
-            }
-        }
-    }
-
-    private fun handlePlayerMistake(timeout: Boolean = false) {
-        if (timeout) {
-            playedWordsList.add(PlayedWordItem(word = "-", isCorrect = false, isTimeout = true))
-        }
-        score -= 5
-        wrongWordsCount++
-        _playerLives.value -= 1
-
-        if (_playerLives.value <= 0) {
-            endGame("BOT")
-        } else {
-            // JIKA SALAH ATAU TIMEOUT: Ganti kata ke kata yang gampang
-            var fallbackWord = easyWords.random()
-            while (_usedWords.value.contains(fallbackWord)) {
-                fallbackWord = easyWords.random()
-            }
-            _currentWord.value = fallbackWord
-            _usedWords.value = _usedWords.value + fallbackWord
-
-            startPlayerTurn()
-        }
-    }
-
-    private fun startBotTurn() {
-        _turn.value = "BOT"
-        viewModelScope.launch {
-            try {
-                delay(1500) // Bot mikir 1.5 detik
-
-                val currentWordStr = _currentWord.value
-                val prefix = if (currentWordStr.isNotEmpty()) currentWordStr.last().toString() else listOf("a","b","k","m","p","r","s","t").random()
-                var botWord: String? = null
-
-                // Filter ketat: Pastikan bot tidak menjawab kata yang ada spasinya!
-                for (i in 1..20) {
-                    val candidate = wordRepository.getRandomWord(prefix)
-                    if (candidate != null && !candidate.contains(" ") && !_usedWords.value.contains(candidate)) {
-                        botWord = candidate
-                        break
-                    }
-                }
-
-                if (botWord != null) {
-                    _usedWords.value = _usedWords.value + botWord
-                    _currentWord.value = botWord
-                    startPlayerTurn()
-                } else {
-                    _botLives.value -= 1
-                    if (_botLives.value <= 0) {
-                        endGame("PLAYER")
-                    } else {
-                        // Jika bot mati kutu, reset pakai kata mudah untuk player
-                        var fallbackWord = easyWords.random()
-                        while (_usedWords.value.contains(fallbackWord)) { fallbackWord = easyWords.random() }
-                        _currentWord.value = fallbackWord
-                        _usedWords.value = _usedWords.value + fallbackWord
-                        startPlayerTurn()
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                startPlayerTurn()
-            }
-        }
-    }
-
-    private fun endGame(winningSide: String) {
-        _status.value = "Finished"
-        _winner.value = winningSide
-
-        viewModelScope.launch {
-            val isWin = winningSide == "PLAYER"
-            val finalScore = if (isWin) score + 50 else score
-
-            val history = MatchHistoryEntity(
-                userId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
-                date = System.currentTimeMillis(),
-                mode = "OFFLINE",
-                opponent = "Bot",
-                result = if (isWin) "WIN" else "LOSE",
-                score = finalScore,
-                correctWords = correctWordsCount,
-                wrongWords = wrongWordsCount,
-                wordsPlayedJson = Json.encodeToString(playedWordsList)
-            )
-            historyRepository.insertHistory(history)
-        }
-    }
-
-    fun resetGame() {
-        score = 0
-        correctWordsCount = 0
-        wrongWordsCount = 0
-        playedWordsList.clear()
-        _usedWords.value = emptyList()
-        _currentWord.value = ""
+    private fun startGame() {
+        _gameStatus.value = "PLAYING"
         _playerLives.value = 3
         _botLives.value = 3
-        _status.value = "Playing"
-        _winner.value = ""
-        startPlayerTurn()
+        _currentWord.value = ""
+        usedWords.clear()
+        _isPlayerTurn.value = true
+        _timeLeft.value = 10
+
+        // Timer TIDAK dipanggil di awal agar user punya waktu mikir kata pertama
+        timerJob?.cancel()
+    }
+
+    // Fungsi Timer Universal (Dipakai untuk Player dan Bot)
+    private fun startTimer() {
+        timerJob?.cancel()
+        _timeLeft.value = 10
+
+        timerJob = viewModelScope.launch {
+            while (_timeLeft.value > 0 && _gameStatus.value == "PLAYING") {
+                delay(1000)
+                _timeLeft.value -= 1 // Detik berkurang terus
+            }
+
+            // Jika waktu habis dan game masih berjalan
+            if (_timeLeft.value <= 0 && _gameStatus.value == "PLAYING") {
+                handleMistake(isPlayer = _isPlayerTurn.value, timeout = true)
+            }
+        }
+    }
+
+    // Fungsi Submit dari UI
+    fun submitWord(word: String) {
+        val cleanedWord = word.trim().uppercase()
+
+        if (cleanedWord.isBlank() || !_isPlayerTurn.value || _gameStatus.value != "PLAYING") return
+
+        val current = _currentWord.value.uppercase()
+
+        // 1. Cek apakah kata sudah dipakai (Mengurangi nyawa)
+        if (usedWords.contains(cleanedWord)) {
+            handleMistake(isPlayer = true, timeout = false, errorMessage = "Kata '$cleanedWord' sudah dipakai!")
+            return
+        }
+
+        // 2. Cek apakah huruf pertama sesuai dengan huruf terakhir kata sebelumnya
+        val isValid = if (current.isEmpty()) {
+            true
+        } else {
+            cleanedWord.first() == current.last()
+        }
+
+        if (isValid) {
+            // Jika Benar
+            usedWords.add(cleanedWord)
+            _currentWord.value = cleanedWord
+            _infoMessage.value = ""
+
+            // Oper ke Bot
+            botTurn()
+        } else {
+            // Jika Salah Huruf
+            handleMistake(isPlayer = true, timeout = false, errorMessage = "Harus diawali huruf '${current.last()}'!")
+        }
+    }
+
+    // Fungsi Logika AI Bot
+    private fun botTurn() {
+        _isPlayerTurn.value = false
+
+        // JALANKAN TIMER BOT! Agar saat bot berpikir, detiknya tetap berkurang
+        startTimer()
+
+        viewModelScope.launch {
+            // Bot pura-pura mikir 2 sampai 4 detik
+            val thinkingTime = (2000L..4000L).random()
+            delay(thinkingTime)
+
+            // Jika pas mikir tiba-tiba game udah kelar, batalkan eksekusi
+            if (_gameStatus.value != "PLAYING") return@launch
+
+            val currentLastChar = _currentWord.value.last()
+
+            // Cari kata yang cocok di kamus bot
+            val possibleWords = botDictionary.filter {
+                it.first() == currentLastChar && !usedWords.contains(it)
+            }
+
+            if (possibleWords.isNotEmpty()) {
+                // Jawaban Bot Ketemu
+                val botWord = possibleWords.random()
+                usedWords.add(botWord)
+                _currentWord.value = botWord
+
+                // Oper balik ke Player
+                _isPlayerTurn.value = true
+                startTimer() // Reset timer dan jalankan untuk player
+            } else {
+                // Bot nyerah / kehabisan kata
+                handleMistake(isPlayer = false, timeout = false, errorMessage = "Bot kehabisan kata-kata!")
+            }
+        }
+    }
+
+    // Fungsi Penanganan Salah & Game Over
+    private fun handleMistake(isPlayer: Boolean, timeout: Boolean, errorMessage: String? = null) {
+        timerJob?.cancel() // Langsung hentikan timer saat salah
+
+        // Kurangi nyawa dan set pesan error sementara
+        if (isPlayer) {
+            _playerLives.value -= 1
+            _infoMessage.value = if (timeout) "Waktu Habis!" else (errorMessage ?: "Kata salah!")
+        } else {
+            _botLives.value -= 1
+            _infoMessage.value = if (timeout) "Waktu Bot Habis!" else (errorMessage ?: "Bot kehabisan kata!")
+        }
+
+        viewModelScope.launch {
+            delay(2000) // Tampilkan pesan kesalahan selama 2 detik biar kebaca
+
+            // CEK APAKAH ADA YANG MATI
+            if (_playerLives.value <= 0) {
+                // PESAN ANDA KALAH SEBELUM KELUAR
+                _infoMessage.value = "GAME OVER: ANDA KALAH!"
+                delay(2500)
+                _gameStatus.value = "FINISHED"
+            } else if (_botLives.value <= 0) {
+                // PESAN ANDA MENANG SEBELUM KELUAR
+                _infoMessage.value = "SELAMAT: ANDA MENANG!"
+                delay(2500)
+                _gameStatus.value = "FINISHED"
+            } else {
+                // KALAU MASIH ADA NYAWA, LANJUT RONDE BARU
+                _infoMessage.value = ""
+                _currentWord.value = listOf("RUMAH", "BUMI", "LAMPU", "MEJA", "KURSI").random()
+
+                // Giliran dilempar ke pihak yang TIDAK salah
+                _isPlayerTurn.value = !isPlayer
+
+                if (_isPlayerTurn.value) {
+                    startTimer()
+                } else {
+                    botTurn() // Fungsi ini sudah mencakup startTimer() buat bot
+                }
+            }
+        }
     }
 }

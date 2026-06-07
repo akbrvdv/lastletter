@@ -1,7 +1,7 @@
 package com.kelompok6.lastletter.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ fun DuelScreen(
     val playerLives by viewModel.playerLives.collectAsState()
     val opponentLives by viewModel.opponentLives.collectAsState()
     val infoMessage by viewModel.infoMessage.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     var inputCode by remember { mutableStateOf("") }
     var inputWord by remember { mutableStateOf("") }
@@ -49,13 +51,19 @@ fun DuelScreen(
 
     val currentUser = FirebaseAuth.getInstance().currentUser
     val playerName = currentUser?.displayName ?: "Player"
+    val context = LocalContext.current
 
     val isMyTurn = (isHost && turn == "HOST") || (!isHost && turn == "GUEST")
 
-    // Penanganan sistematis tombol "Back" HP agar room terhapus jika Host keluar
     BackHandler {
         viewModel.leaveRoom()
         navController.popBackStack()
+    }
+
+    LaunchedEffect(infoMessage) {
+        if (infoMessage.isNotEmpty()) {
+            Toast.makeText(context, infoMessage, Toast.LENGTH_SHORT).show()
+        }
     }
 
     Scaffold(
@@ -75,7 +83,6 @@ fun DuelScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-            // --- 1. LAYAR MEMBUAT / GABUNG ROOM ---
             if (roomStatus == "NONE") {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -88,8 +95,18 @@ fun DuelScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Buat kode unik dan bagikan ke temanmu!", color = Color.White.copy(alpha = 0.8f), textAlign = TextAlign.Center, fontSize = 14.sp)
                             Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { viewModel.createRoom() }, colors = ButtonDefaults.buttonColors(containerColor = primaryYellow), modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                                Text("CREATE ROOM", color = bgColorBottom, fontWeight = FontWeight.ExtraBold)
+
+                            Button(
+                                onClick = { viewModel.createRoom() },
+                                enabled = !isLoading,
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryYellow),
+                                modifier = Modifier.fillMaxWidth().height(50.dp)
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(color = bgColorBottom, modifier = Modifier.size(24.dp))
+                                } else {
+                                    Text("CREATE ROOM", color = bgColorBottom, fontWeight = FontWeight.ExtraBold)
+                                }
                             }
                         }
                     }
@@ -102,20 +119,24 @@ fun DuelScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             OutlinedTextField(value = inputCode, onValueChange = { inputCode = it.uppercase() }, label = { Text("Kode Room 6 Digit") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                             Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { viewModel.joinRoom(inputCode) }, enabled = inputCode.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = secondaryPurple), modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                                Text("JOIN ROOM", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
 
-                            // Menampilkan pesan error dari Firebase (contoh: Kode salah)
-                            AnimatedVisibility(visible = infoMessage.isNotEmpty()) {
-                                Text(text = infoMessage, color = Color.Red, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp), textAlign = TextAlign.Center)
+                            Button(
+                                onClick = { viewModel.joinRoom(inputCode) },
+                                enabled = inputCode.isNotBlank() && !isLoading,
+                                colors = ButtonDefaults.buttonColors(containerColor = secondaryPurple),
+                                modifier = Modifier.fillMaxWidth().height(50.dp)
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                } else {
+                                    Text("JOIN ROOM", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
-            }
+            } // INI ADALAH KURUNG KURAWAL YANG TADI HILANG
 
-            // --- 2. LAYAR MENUNGGU LAWAN ---
             else if (roomStatus == "WAITING") {
                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     CircularProgressIndicator(color = primaryYellow)
@@ -131,7 +152,6 @@ fun DuelScreen(
                 }
             }
 
-            // --- 3. LAYAR ARENA BERMAIN (PVP) ---
             else {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(modifier = Modifier.fillMaxWidth().background(secondaryPurple).padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -185,7 +205,6 @@ fun DuelScreen(
                     }
                 }
 
-                // POPUP GAME SELESAI
                 if (roomStatus == "FINISHED") {
                     val isWin = playerLives > 0
                     AlertDialog(
