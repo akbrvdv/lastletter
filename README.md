@@ -58,18 +58,18 @@ Untuk menjalankan aplikasi ini secara lokal di Android Studio, ikuti langkah-lan
 
 1. **Clone Repositori:**
    ```bash
-   git clone [https://github.com/akbrvdv/lastletter.git]
+   git clone https://github.com/akbrvdv/lastletter.git
 2. **Buka di Android Studio:**
-   ```bash
+   
    Buka direktori yang baru saja di-clone menggunakan Android Studio versi terbaru.
 3. **Konfigurasi Firebase:**
-   ```bash
+   
    *Pastikan Anda memiliki proyek aktif di Firebase Console.
    *Aktifkan layanan Authentication (Email/Password) dan Realtime Database.
    *Unduh file google-services.json dari Firebase Console Anda.
    *Letakkan file tersebut di dalam folder app/ pada proyek ini.
 3. **Build & Run:**
-   ```bash
+   
    Klik Run (Shift + F10) untuk menjalankan aplikasi di Emulator atau perangkat Android fisik.
 
 ---
@@ -90,7 +90,7 @@ Proyek ini dipisahkan berdasarkan ranah tanggung jawab (Separation of Concerns):
 ## 🎓 Tentang Proyek
 Proyek ini dikembangkan sebagai pemenuhan Tugas Ujian Akhir Semester (UAS) Pemrograman Mobile II di program studi Teknologi Rekayasa Perangkat Lunak, Politeknik Negeri Madiun.
 
-Dikembangkan oleh Kelompok 8:
+Dikembangkan oleh Kelompok 6:
 
 * **Dava Febri Wardana** * *Backend Ecosystem & Firebase Sync:* Integrasi Firebase Auth dan Realtime Database untuk sinkronisasi mode PvP.
   * *Database Architecture:* Perancangan Room Database untuk riwayat permainan terisolasi (*fallback migration*) dan implementasi logika *Auto-Login*.
